@@ -1,0 +1,919 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    function isEmailVerified() {
+      return signedIn() && request.auth.token.email_verified == true;
+    }
+
+    function currentUserRole() {
+      return (signedIn()
+        && exists(/databases/$(database)/documents/users/$(request.auth.uid)))
+        ? get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role
+        : null;
+    }
+
+    function isModerator() {
+      return currentUserRole() in ['moderator', 'admin'];
+    }
+
+    function isAdmin() {
+      return currentUserRole() == 'admin';
+    }
+
+    function validDisplayName(data) {
+      return data.displayName is string
+        && data.displayName.size() >= 2
+        && data.displayName.size() <= 80;
+    }
+
+    function validBio(data) {
+      return data.bio is string && data.bio.size() <= 280;
+    }
+
+    function validPhotoURL(data) {
+      return data.photoURL is string && data.photoURL.size() <= 2048;
+    }
+
+    function validOnboarding(data) {
+      return !data.keys().hasAny(['onboardingCompleted', 'experienceLevel', 'learningGoal'])
+        || (data.keys().hasAll(['onboardingCompleted', 'experienceLevel', 'learningGoal'])
+          && data.onboardingCompleted is bool
+          && data.experienceLevel is string
+          && data.learningGoal is string
+          && ((data.onboardingCompleted == false
+            && data.experienceLevel == ''
+            && data.learningGoal == '')
+          || (data.onboardingCompleted == true
+            && data.experienceLevel in ['never-programmed', 'some-contact', 'basic-knowledge']
+            && data.learningGoal in ['learn-from-zero', 'web-development', 'review-knowledge', 'build-projects'])));
+    }
+
+    function validLegalAcceptance(data) {
+      return !data.keys().hasAny([
+        'termsAcceptedAt', 'termsVersion', 'privacyAcceptedAt', 'privacyVersion'
+      ])
+        || (data.keys().hasAll([
+          'termsAcceptedAt', 'termsVersion', 'privacyAcceptedAt', 'privacyVersion'
+        ])
+          && data.termsAcceptedAt is timestamp
+          && data.termsVersion == '2026-09'
+          && data.privacyAcceptedAt is timestamp
+          && data.privacyVersion == '2026-09');
+    }
+
+    function validUserDocument(data) {
+      return validDisplayName(data)
+        && validBio(data)
+        && validPhotoURL(data)
+        && data.role is string
+        && data.role in ['student', 'moderator', 'admin']
+        && data.username is string
+        && data.usernameNormalized is string
+        && data.username == data.usernameNormalized
+        && data.usernameNormalized.matches('^[a-z0-9_]{3,20}$')
+        && validOnboarding(data)
+        && validLegalAcceptance(data);
+    }
+
+    function validPublicProfile(data) {
+      return validDisplayName(data)
+        && validBio(data)
+        && validPhotoURL(data)
+        && data.username is string
+        && data.usernameNormalized is string
+        && data.username == data.usernameNormalized
+        && data.usernameNormalized.matches('^[a-z0-9_]{3,20}$');
+    }
+
+    function validLessonProgressFields(data) {
+      return data.keys().hasOnly([
+        'lessonId', 'courseId', 'moduleId', 'status',
+        'startedAt', 'completedAt', 'lastAccessedAt', 'updatedAt',
+        'currentStep', 'completedSteps'
+      ])
+        && data.keys().hasAll([
+          'lessonId', 'courseId', 'moduleId', 'status',
+          'startedAt', 'lastAccessedAt', 'updatedAt'
+        ])
+        && data.lessonId is string
+        && data.courseId is string
+        && data.moduleId is string
+        && data.status in ['in_progress', 'completed'];
+    }
+
+    function validInteractiveLessonProgressFields(data) {
+      return !data.keys().hasAny(['currentStep', 'completedSteps'])
+        || (data.keys().hasAll(['currentStep', 'completedSteps'])
+          && data.currentStep is int
+          && data.completedSteps is int
+          && data.currentStep >= 0
+          && data.completedSteps >= 0
+          && data.currentStep <= 50
+          && data.completedSteps <= 50);
+    }
+
+    function validInteractiveLessonProgressUpdate(data, previousData) {
+      return (!previousData.keys().hasAny(['currentStep', 'completedSteps'])
+          && (!data.keys().hasAny(['currentStep', 'completedSteps'])
+            || data.keys().hasAll(['currentStep', 'completedSteps'])))
+        || (previousData.keys().hasAll(['currentStep', 'completedSteps'])
+          && data.keys().hasAll(['currentStep', 'completedSteps'])
+          && data.completedSteps >= previousData.completedSteps);
+    }
+
+    function lessonProgressMatchesPublishedLesson(lessonId, data) {
+      return exists(/databases/$(database)/documents/lessons/$(lessonId))
+        && get(/databases/$(database)/documents/lessons/$(lessonId)).data.status == 'published'
+        && data.lessonId == lessonId
+        && data.courseId == get(/databases/$(database)/documents/lessons/$(lessonId)).data.courseId
+        && data.moduleId == get(/databases/$(database)/documents/lessons/$(lessonId)).data.moduleId;
+    }
+
+    function validNewLessonProgress(data) {
+      return validInteractiveLessonProgressFields(data)
+        && data.startedAt == request.time
+        && data.lastAccessedAt == request.time
+        && data.updatedAt == request.time
+        && ((data.status == 'in_progress' && !data.keys().hasAny(['completedAt']))
+          || (data.status == 'completed'
+            && data.keys().hasAll(['completedAt'])
+            && data.completedAt == request.time));
+    }
+
+    function validLessonProgressUpdate(data, previousData) {
+      return validInteractiveLessonProgressFields(data)
+        && validInteractiveLessonProgressUpdate(data, previousData)
+        && data.lessonId == previousData.lessonId
+        // courseId e moduleId podem ser reconciliados após uma reorganização
+        // curricular, mas lessonProgressMatchesPublishedLesson exige que ambos
+        // sejam exatamente os valores da aula publicada cujo ID é imutável.
+        && data.startedAt == previousData.startedAt
+        && data.lastAccessedAt == request.time
+        && data.updatedAt == request.time
+        && ((previousData.status == 'in_progress'
+          && ((data.status == 'in_progress' && !data.keys().hasAny(['completedAt']))
+            || (data.status == 'completed'
+              && data.keys().hasAll(['completedAt'])
+              && data.completedAt == request.time)))
+          || (previousData.status == 'completed'
+            && data.status == 'completed'
+            && data.keys().hasAll(['completedAt'])
+            && data.completedAt == previousData.completedAt));
+    }
+
+    function validActivityAttemptFields(data) {
+      return data.keys().hasOnly([
+        'activityId', 'lessonId', 'courseId', 'moduleId', 'status',
+        'answers', 'correctCount', 'totalQuestions', 'submittedAt', 'updatedAt'
+      ])
+        && data.keys().hasAll([
+          'activityId', 'lessonId', 'courseId', 'moduleId', 'status',
+          'answers', 'correctCount', 'totalQuestions', 'submittedAt', 'updatedAt'
+        ])
+        && data.activityId is string
+        && data.lessonId is string
+        && data.courseId is string
+        && data.moduleId is string
+        && data.status == 'submitted'
+        && data.answers is map
+        && data.answers.keys().size() > 0
+        && data.correctCount is int
+        && data.correctCount >= 0
+        && data.totalQuestions is int
+        && data.totalQuestions > 0
+        && data.correctCount <= data.totalQuestions
+        && data.submittedAt == request.time
+        && data.updatedAt == request.time;
+    }
+
+    function activityAttemptMatchesPublishedActivity(activityId, data) {
+      let activity = get(/databases/$(database)/documents/activities/$(activityId));
+      return activity.data.status == 'published'
+        && data.activityId == activityId
+        && data.lessonId == activity.data.lessonId
+        && data.courseId == activity.data.courseId
+        && data.moduleId == activity.data.moduleId
+        && data.totalQuestions == activity.data.questions.size()
+        && data.answers.keys().size() == activity.data.questions.size();
+    }
+
+    function validPracticalConceptIds(conceptIds) {
+      return conceptIds is list
+        && conceptIds.size() > 0
+        && conceptIds.size() <= 12
+        && conceptIds.toSet().size() == conceptIds.size()
+        && (conceptIds.size() < 1 || conceptIds[0] is string)
+        && (conceptIds.size() < 2 || conceptIds[1] is string)
+        && (conceptIds.size() < 3 || conceptIds[2] is string)
+        && (conceptIds.size() < 4 || conceptIds[3] is string)
+        && (conceptIds.size() < 5 || conceptIds[4] is string)
+        && (conceptIds.size() < 6 || conceptIds[5] is string)
+        && (conceptIds.size() < 7 || conceptIds[6] is string)
+        && (conceptIds.size() < 8 || conceptIds[7] is string)
+        && (conceptIds.size() < 9 || conceptIds[8] is string)
+        && (conceptIds.size() < 10 || conceptIds[9] is string)
+        && (conceptIds.size() < 11 || conceptIds[10] is string)
+        && (conceptIds.size() < 12 || conceptIds[11] is string);
+    }
+
+    function validPracticalOrderStepIds(stepIds, expectedSize) {
+      return stepIds is list
+        && stepIds.size() == expectedSize
+        && stepIds.size() > 0
+        && stepIds.size() <= 8
+        && stepIds.toSet().size() == stepIds.size()
+        && (stepIds.size() < 1 || stepIds[0] is string)
+        && (stepIds.size() < 2 || stepIds[1] is string)
+        && (stepIds.size() < 3 || stepIds[2] is string)
+        && (stepIds.size() < 4 || stepIds[3] is string)
+        && (stepIds.size() < 5 || stepIds[4] is string)
+        && (stepIds.size() < 6 || stepIds[5] is string)
+        && (stepIds.size() < 7 || stepIds[6] is string)
+        && (stepIds.size() < 8 || stepIds[7] is string);
+    }
+
+    function validPracticalTextResponse(response) {
+      return response.keys().hasOnly(['kind', 'text'])
+        && response.keys().hasAll(['kind', 'text'])
+        && response.kind == 'text'
+        && response.text is string
+        && response.text.size() > 0
+        && response.text.size() <= 3000;
+    }
+
+    function validPracticalOrderResponse(response, exercise) {
+      return response.keys().hasOnly(['kind', 'orderedStepIds'])
+        && response.keys().hasAll(['kind', 'orderedStepIds'])
+        && response.kind == 'ordered_steps'
+        && validPracticalOrderStepIds(response.orderedStepIds, exercise.data.steps.size());
+    }
+
+    function validPracticalAttemptFields(data) {
+      return data.keys().hasOnly([
+        'exerciseId', 'lessonId', 'courseId', 'moduleId', 'type', 'response',
+        'resultStatus', 'feedback', 'hint', 'conceptIds', 'submittedAt', 'updatedAt'
+      ])
+        && data.keys().hasAll([
+          'exerciseId', 'lessonId', 'courseId', 'moduleId', 'type', 'response',
+          'resultStatus', 'feedback', 'hint', 'conceptIds', 'submittedAt', 'updatedAt'
+        ])
+        && data.exerciseId is string
+        && data.lessonId is string
+        && data.courseId is string
+        && data.moduleId is string
+        && data.type in ['complete_code', 'write_code', 'order_steps']
+        && data.response is map
+        && data.resultStatus in ['correct', 'partially_correct', 'needs_revision']
+        && data.feedback is string
+        && data.feedback.size() <= 2400
+        && data.hint is string
+        && data.hint.size() <= 1200
+        && validPracticalConceptIds(data.conceptIds)
+        && data.submittedAt == request.time
+        && data.updatedAt == request.time;
+    }
+
+    function practicalAttemptMatchesPublishedExercise(exerciseId, data) {
+      let exercise = get(/databases/$(database)/documents/practicalExercises/$(exerciseId));
+      return exercise.data.status == 'published'
+        && data.exerciseId == exerciseId
+        && data.lessonId == exercise.data.lessonId
+        && data.courseId == exercise.data.courseId
+        && data.moduleId == exercise.data.moduleId
+        && data.type == exercise.data.type
+        && data.conceptIds == exercise.data.conceptIds
+        && ((data.type in ['complete_code', 'write_code']
+          && validPracticalTextResponse(data.response))
+          || (data.type == 'order_steps'
+            && validPracticalOrderResponse(data.response, exercise)));
+    }
+
+    function validConceptMasteryFields(data) {
+      return data.keys().hasOnly([
+        'conceptId', 'correctAnswers', 'incorrectAnswers', 'needsReview',
+        'lastLessonId', 'createdAt', 'updatedAt'
+      ])
+        && data.keys().hasAll([
+          'conceptId', 'correctAnswers', 'incorrectAnswers', 'needsReview',
+          'lastLessonId', 'createdAt', 'updatedAt'
+        ])
+        && data.conceptId is string
+        && data.correctAnswers is int
+        && data.correctAnswers >= 0
+        && data.incorrectAnswers is int
+        && data.incorrectAnswers >= 0
+        && data.needsReview is bool
+        && data.lastLessonId is string;
+    }
+
+    function conceptMasteryMatchesPublishedContent(conceptId, data) {
+      let concept = get(/databases/$(database)/documents/concepts/$(conceptId));
+      let lesson = get(/databases/$(database)/documents/lessons/$(data.lastLessonId));
+      return concept.data.status == 'published'
+        && data.conceptId == conceptId
+        && lesson.data.status == 'published'
+        && lesson.data.conceptIds.hasAny([conceptId]);
+    }
+
+    function validNewConceptMastery(data) {
+      return data.createdAt == request.time
+        && data.updatedAt == request.time;
+    }
+
+    function validConceptMasteryUpdate(data, previousData) {
+      return data.conceptId == previousData.conceptId
+        // Documentos anteriores à inclusão de createdAt recebem esse campo somente
+        // nesta primeira atualização. Depois disso, ele permanece imutável.
+        && ((previousData.keys().hasAll(['createdAt'])
+          && data.createdAt == previousData.createdAt)
+          || (!previousData.keys().hasAny(['createdAt'])
+            && data.createdAt == request.time))
+        && data.correctAnswers >= previousData.correctAnswers
+        && data.incorrectAnswers >= previousData.incorrectAnswers
+        && data.updatedAt == request.time;
+    }
+
+    function validCommunityTag(tag) {
+      return tag is string
+        && tag.size() >= 1
+        && tag.size() <= 30
+        && tag.matches('^[a-z0-9]+(-[a-z0-9]+)*$');
+    }
+
+    function validCommunityTags(tags) {
+      return tags is list
+        && tags.size() <= 5
+        && tags.toSet().size() == tags.size()
+        && (tags.size() < 1 || validCommunityTag(tags[0]))
+        && (tags.size() < 2 || validCommunityTag(tags[1]))
+        && (tags.size() < 3 || validCommunityTag(tags[2]))
+        && (tags.size() < 4 || validCommunityTag(tags[3]))
+        && (tags.size() < 5 || validCommunityTag(tags[4]));
+    }
+
+    function validPostFields(data) {
+      return data.keys().hasOnly([
+        'authorUid', 'type', 'title', 'body', 'tags', 'status', 'createdAt', 'updatedAt',
+        'deletedBy', 'deletionType', 'deletedAt'
+      ])
+        && data.keys().hasAll([
+          'authorUid', 'type', 'title', 'body', 'tags', 'status', 'createdAt', 'updatedAt'
+        ])
+        && data.authorUid is string
+        && data.authorUid.size() > 0
+        && data.type in ['question', 'discussion']
+        && data.title is string
+        && data.title.size() >= 5
+        && data.title.size() <= 140
+        && data.body is string
+        && data.body.size() >= 10
+        && data.body.size() <= 5000
+        && validCommunityTags(data.tags)
+        && ((data.status == 'published'
+          && !data.keys().hasAny(['deletedBy', 'deletionType', 'deletedAt']))
+          || (data.status == 'deleted'
+            && data.keys().hasAll(['deletedBy', 'deletionType', 'deletedAt'])
+            && data.deletedBy is string
+            && data.deletedBy.size() > 0
+            && data.deletionType in ['author', 'moderation']));
+    }
+
+    function validNewPost(data) {
+      return data.authorUid == request.auth.uid
+        && data.status == 'published'
+        && data.createdAt == request.time
+        && data.updatedAt == request.time;
+    }
+
+    function validPostUpdate(data, previousData) {
+      return previousData.status == 'published'
+        && data.authorUid == previousData.authorUid
+        && data.createdAt == previousData.createdAt
+        && data.updatedAt == request.time
+        && ((data.status == 'published'
+          && data.diff(previousData).affectedKeys().hasOnly([
+            'type', 'title', 'body', 'tags', 'updatedAt'
+          ]))
+          || (data.status == 'deleted'
+            && data.deletedBy == request.auth.uid
+            && data.deletionType == 'author'
+            && data.deletedAt == request.time
+            && data.diff(previousData).affectedKeys().hasOnly([
+              'status', 'updatedAt', 'deletedBy', 'deletionType', 'deletedAt'
+            ])));
+    }
+
+    function validModeratorPostUpdate(data, previousData) {
+      return previousData.status == 'published'
+        && data.authorUid == previousData.authorUid
+        && data.authorUid != request.auth.uid
+        && data.type == previousData.type
+        && data.title == previousData.title
+        && data.body == previousData.body
+        && data.tags == previousData.tags
+        && data.createdAt == previousData.createdAt
+        && data.status == 'deleted'
+        && data.deletedBy == request.auth.uid
+        && data.deletionType == 'moderation'
+        && data.deletedAt == request.time
+        && data.updatedAt == request.time
+        && data.diff(previousData).affectedKeys().hasOnly([
+          'status', 'updatedAt', 'deletedBy', 'deletionType', 'deletedAt'
+        ]);
+    }
+
+    function publishedPost(postId) {
+      return exists(/databases/$(database)/documents/posts/$(postId))
+        && get(/databases/$(database)/documents/posts/$(postId)).data.status == 'published';
+    }
+
+    function validReplyFields(data) {
+      return data.keys().hasOnly([
+        'authorUid', 'body', 'status', 'createdAt', 'updatedAt',
+        'deletedBy', 'deletionType', 'deletedAt'
+      ])
+        && data.keys().hasAll([
+          'authorUid', 'body', 'status', 'createdAt', 'updatedAt'
+        ])
+        && data.authorUid is string
+        && data.authorUid.size() > 0
+        && data.body is string
+        && data.body.size() >= 2
+        && data.body.size() <= 3000
+        && ((data.status == 'published'
+          && !data.keys().hasAny(['deletedBy', 'deletionType', 'deletedAt']))
+          || (data.status == 'deleted'
+            && data.keys().hasAll(['deletedBy', 'deletionType', 'deletedAt'])
+            && data.deletedBy is string
+            && data.deletedBy.size() > 0
+            && data.deletionType in ['author', 'moderation']));
+    }
+
+    function validNewReply(data) {
+      return data.authorUid == request.auth.uid
+        && data.status == 'published'
+        && data.createdAt == request.time
+        && data.updatedAt == request.time;
+    }
+
+    function validReplyUpdate(data, previousData) {
+      return previousData.status == 'published'
+        && data.authorUid == previousData.authorUid
+        && data.createdAt == previousData.createdAt
+        && data.updatedAt == request.time
+        && ((data.status == 'published'
+          && data.diff(previousData).affectedKeys().hasOnly(['body', 'updatedAt']))
+          || (data.status == 'deleted'
+            && data.deletedBy == request.auth.uid
+            && data.deletionType == 'author'
+            && data.deletedAt == request.time
+            && data.diff(previousData).affectedKeys().hasOnly([
+              'status', 'updatedAt', 'deletedBy', 'deletionType', 'deletedAt'
+            ])));
+    }
+
+    function validModeratorReplyUpdate(data, previousData) {
+      return previousData.status == 'published'
+        && data.authorUid == previousData.authorUid
+        && data.authorUid != request.auth.uid
+        && data.body == previousData.body
+        && data.createdAt == previousData.createdAt
+        && data.status == 'deleted'
+        && data.deletedBy == request.auth.uid
+        && data.deletionType == 'moderation'
+        && data.deletedAt == request.time
+        && data.updatedAt == request.time
+        && data.diff(previousData).affectedKeys().hasOnly([
+          'status', 'updatedAt', 'deletedBy', 'deletionType', 'deletedAt'
+        ]);
+    }
+
+    function publishedReply(postId, replyId) {
+      return publishedPost(postId)
+        && exists(/databases/$(database)/documents/posts/$(postId)/replies/$(replyId))
+        && get(/databases/$(database)/documents/posts/$(postId)/replies/$(replyId)).data.status == 'published';
+    }
+
+    function validHelpfulFields(uid, data) {
+      return data.keys().hasOnly(['uid', 'createdAt'])
+        && data.keys().hasAll(['uid', 'createdAt'])
+        && uid == request.auth.uid
+        && data.uid == request.auth.uid
+        && data.createdAt == request.time;
+    }
+
+    function validReportFields(data) {
+      return data.keys().hasOnly([
+        'reporterUid', 'targetType', 'postId', 'replyId',
+        'reason', 'details', 'status', 'createdAt',
+        'reviewedAt', 'reviewedBy', 'resolutionNote'
+      ])
+        && data.keys().hasAll([
+          'reporterUid', 'targetType', 'postId', 'replyId',
+          'reason', 'details', 'status', 'createdAt'
+        ])
+        && data.reporterUid is string
+        && data.reporterUid.size() > 0
+        && data.targetType in ['post', 'reply']
+        && data.postId is string
+        && data.postId.size() > 0
+        && ((data.targetType == 'post' && data.replyId == null)
+          || (data.targetType == 'reply' && data.replyId is string && data.replyId.size() > 0))
+        && data.reason in ['spam', 'harassment', 'offensive', 'dangerous', 'other']
+        && data.details is string
+        && data.details.size() <= 1000
+        && (data.reason != 'other' || data.details.size() >= 5)
+        && data.status in ['open', 'resolved', 'dismissed']
+        && ((data.status == 'open'
+          && !data.keys().hasAny(['reviewedAt', 'reviewedBy', 'resolutionNote']))
+          || (data.status in ['resolved', 'dismissed']
+            && data.keys().hasAll(['reviewedAt', 'reviewedBy'])
+            && data.reviewedBy is string
+            && data.reviewedBy.size() > 0
+            && (!data.keys().hasAny(['resolutionNote'])
+              || (data.resolutionNote is string && data.resolutionNote.size() <= 1000))));
+    }
+
+    function reportDocumentId(data) {
+      return data.targetType == 'post'
+        ? data.reporterUid + '_post_' + data.postId
+        : data.reporterUid + '_reply_' + data.postId + '_' + data.replyId;
+    }
+
+    function reportTargetsPublishedContent(data) {
+      return (data.targetType == 'post'
+          && publishedPost(data.postId)
+          && request.auth.uid != get(/databases/$(database)/documents/posts/$(data.postId)).data.authorUid)
+        || (data.targetType == 'reply'
+          && publishedReply(data.postId, data.replyId)
+          && request.auth.uid != get(/databases/$(database)/documents/posts/$(data.postId)/replies/$(data.replyId)).data.authorUid);
+    }
+
+    function validNewReport(reportId, data) {
+      return data.reporterUid == request.auth.uid
+        && reportId == reportDocumentId(data)
+        && data.status == 'open'
+        && data.createdAt == request.time
+        && reportTargetsPublishedContent(data);
+    }
+
+    function reportTargetWasAlreadyRemoved(data) {
+      return (data.targetType == 'post'
+          && (!exists(/databases/$(database)/documents/posts/$(data.postId))
+            || get(/databases/$(database)/documents/posts/$(data.postId)).data.status == 'deleted'))
+        || (data.targetType == 'reply'
+          && (!exists(/databases/$(database)/documents/posts/$(data.postId)/replies/$(data.replyId))
+            || get(/databases/$(database)/documents/posts/$(data.postId)/replies/$(data.replyId)).data.status == 'deleted'));
+    }
+
+    function reportTargetIsRemovedByThisReview(data) {
+      return (data.targetType == 'post'
+          && exists(/databases/$(database)/documents/posts/$(data.postId))
+          && get(/databases/$(database)/documents/posts/$(data.postId)).data.status == 'published'
+          && getAfter(/databases/$(database)/documents/posts/$(data.postId)).data.status == 'deleted'
+          && getAfter(/databases/$(database)/documents/posts/$(data.postId)).data.deletedBy == request.auth.uid
+          && getAfter(/databases/$(database)/documents/posts/$(data.postId)).data.deletionType == 'moderation'
+          && getAfter(/databases/$(database)/documents/posts/$(data.postId)).data.deletedAt == request.time)
+        || (data.targetType == 'reply'
+          && exists(/databases/$(database)/documents/posts/$(data.postId)/replies/$(data.replyId))
+          && get(/databases/$(database)/documents/posts/$(data.postId)/replies/$(data.replyId)).data.status == 'published'
+          && getAfter(/databases/$(database)/documents/posts/$(data.postId)/replies/$(data.replyId)).data.status == 'deleted'
+          && getAfter(/databases/$(database)/documents/posts/$(data.postId)/replies/$(data.replyId)).data.deletedBy == request.auth.uid
+          && getAfter(/databases/$(database)/documents/posts/$(data.postId)/replies/$(data.replyId)).data.deletionType == 'moderation'
+          && getAfter(/databases/$(database)/documents/posts/$(data.postId)/replies/$(data.replyId)).data.deletedAt == request.time);
+    }
+
+    function reportReviewMatchesTarget(data) {
+      return data.status == 'dismissed'
+        || (data.status == 'resolved'
+          && (reportTargetWasAlreadyRemoved(data)
+            || reportTargetIsRemovedByThisReview(data)));
+    }
+
+    function validReportReview(data, previousData) {
+      return previousData.status == 'open'
+        && data.reporterUid == previousData.reporterUid
+        && data.targetType == previousData.targetType
+        && data.postId == previousData.postId
+        && data.replyId == previousData.replyId
+        && data.reason == previousData.reason
+        && data.details == previousData.details
+        && data.createdAt == previousData.createdAt
+        && data.status in ['resolved', 'dismissed']
+        && data.reviewedBy == request.auth.uid
+        && data.reviewedAt == request.time
+        && data.diff(previousData).affectedKeys().hasOnly([
+          'status', 'reviewedAt', 'reviewedBy', 'resolutionNote'
+        ])
+        && reportReviewMatchesTarget(data);
+    }
+
+    match /users/{uid} {
+      // O AuthProvider lê a própria conta antes da confirmação do e-mail.
+      allow read: if isOwner(uid);
+
+      allow create: if isOwner(uid)
+        && request.resource.data.keys().hasOnly([
+          'displayName', 'username', 'usernameNormalized', 'photoURL', 'bio',
+          'role', 'emailVerified', 'onboardingCompleted', 'experienceLevel', 'learningGoal',
+          'termsAcceptedAt', 'termsVersion', 'privacyAcceptedAt', 'privacyVersion',
+          'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.keys().hasAll([
+          'displayName', 'username', 'usernameNormalized', 'photoURL', 'bio',
+          'role', 'emailVerified', 'onboardingCompleted', 'experienceLevel', 'learningGoal',
+          'termsAcceptedAt', 'termsVersion', 'privacyAcceptedAt', 'privacyVersion',
+          'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.role == 'student'
+        && validUserDocument(request.resource.data)
+        && request.resource.data.emailVerified == false
+        && request.resource.data.termsAcceptedAt == request.time
+        && request.resource.data.termsVersion == '2026-09'
+        && request.resource.data.privacyAcceptedAt == request.time
+        && request.resource.data.privacyVersion == '2026-09'
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.updatedAt == request.time
+        && getAfter(/databases/$(database)/documents/usernames/$(request.resource.data.usernameNormalized)).data.uid == request.auth.uid
+        && getAfter(/databases/$(database)/documents/profiles/$(request.resource.data.usernameNormalized)).data.uid == request.auth.uid
+        && getAfter(/databases/$(database)/documents/profiles/$(request.resource.data.usernameNormalized)).data.displayName == request.resource.data.displayName
+        && getAfter(/databases/$(database)/documents/profiles/$(request.resource.data.usernameNormalized)).data.bio == request.resource.data.bio
+        && getAfter(/databases/$(database)/documents/profiles/$(request.resource.data.usernameNormalized)).data.photoURL == request.resource.data.photoURL;
+
+      allow update: if isOwner(uid)
+        // Antes da verificação, permite apenas sincronizar o estado do e-mail.
+        // A validação abaixo continua vinculando esse estado ao token do Auth.
+        && (isEmailVerified()
+          || request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+            'emailVerified', 'updatedAt'
+          ]))
+        && request.resource.data.keys().hasOnly([
+          'displayName', 'username', 'usernameNormalized', 'photoURL', 'bio',
+          'role', 'emailVerified', 'onboardingCompleted', 'experienceLevel', 'learningGoal',
+          'termsAcceptedAt', 'termsVersion', 'privacyAcceptedAt', 'privacyVersion',
+          'createdAt', 'updatedAt'
+        ])
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'displayName', 'photoURL', 'bio', 'emailVerified', 'onboardingCompleted',
+          'experienceLevel', 'learningGoal', 'updatedAt'
+        ])
+        && validUserDocument(request.resource.data)
+        && request.resource.data.role == resource.data.role
+        && request.resource.data.username == resource.data.username
+        && request.resource.data.usernameNormalized == resource.data.usernameNormalized
+        && request.resource.data.createdAt == resource.data.createdAt
+        && (request.resource.data.emailVerified == resource.data.emailVerified
+          || request.resource.data.emailVerified == isEmailVerified())
+        && request.resource.data.updatedAt == request.time
+        && getAfter(/databases/$(database)/documents/profiles/$(resource.data.usernameNormalized)).data.displayName == request.resource.data.displayName
+        && getAfter(/databases/$(database)/documents/profiles/$(resource.data.usernameNormalized)).data.bio == request.resource.data.bio
+        && getAfter(/databases/$(database)/documents/profiles/$(resource.data.usernameNormalized)).data.photoURL == request.resource.data.photoURL;
+
+      allow delete: if false;
+    }
+
+    match /users/{uid}/lessonProgress/{lessonId} {
+      allow read: if isEmailVerified() && isOwner(uid);
+
+      allow create: if isEmailVerified() && isOwner(uid)
+        && validLessonProgressFields(request.resource.data)
+        && lessonProgressMatchesPublishedLesson(lessonId, request.resource.data)
+        && validNewLessonProgress(request.resource.data);
+
+      allow update: if isEmailVerified() && isOwner(uid)
+        && validLessonProgressFields(request.resource.data)
+        && lessonProgressMatchesPublishedLesson(lessonId, request.resource.data)
+        && validLessonProgressUpdate(request.resource.data, resource.data);
+
+      allow delete: if false;
+    }
+
+    match /users/{uid}/activityAttempts/{attemptId} {
+      allow read: if isEmailVerified() && isOwner(uid);
+
+      allow create: if isEmailVerified() && isOwner(uid)
+        && validActivityAttemptFields(request.resource.data)
+        && activityAttemptMatchesPublishedActivity(request.resource.data.activityId, request.resource.data);
+
+      allow update, delete: if false;
+    }
+
+    match /users/{uid}/practicalAttempts/{attemptId} {
+      allow read: if isEmailVerified() && isOwner(uid);
+
+      allow create: if isEmailVerified() && isOwner(uid)
+        && validPracticalAttemptFields(request.resource.data)
+        && practicalAttemptMatchesPublishedExercise(request.resource.data.exerciseId, request.resource.data);
+
+      allow update, delete: if false;
+    }
+
+    match /users/{uid}/conceptMastery/{conceptId} {
+      allow read: if isEmailVerified() && isOwner(uid);
+
+      allow create: if isEmailVerified() && isOwner(uid)
+        && validConceptMasteryFields(request.resource.data)
+        && conceptMasteryMatchesPublishedContent(conceptId, request.resource.data)
+        && validNewConceptMastery(request.resource.data);
+
+      allow update: if isEmailVerified() && isOwner(uid)
+        && validConceptMasteryFields(request.resource.data)
+        && conceptMasteryMatchesPublishedContent(conceptId, request.resource.data)
+        && validConceptMasteryUpdate(request.resource.data, resource.data);
+
+      allow delete: if false;
+    }
+
+    match /profiles/{usernameNormalized} {
+      allow read: if true;
+
+      allow create: if signedIn()
+        && usernameNormalized == request.resource.data.usernameNormalized
+        && request.resource.data.keys().hasOnly([
+          'uid', 'displayName', 'username', 'usernameNormalized', 'photoURL', 'bio', 'updatedAt'
+        ])
+        && request.resource.data.keys().hasAll([
+          'uid', 'displayName', 'username', 'usernameNormalized', 'photoURL', 'bio', 'updatedAt'
+        ])
+        && request.resource.data.uid == request.auth.uid
+        && validPublicProfile(request.resource.data)
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.username == getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.username
+        && request.resource.data.usernameNormalized == getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.usernameNormalized
+        && request.resource.data.displayName == getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.displayName
+        && request.resource.data.bio == getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.bio
+        && request.resource.data.photoURL == getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.photoURL;
+
+      allow update: if isEmailVerified()
+        && resource.data.uid == request.auth.uid
+        && request.resource.data.keys().hasOnly([
+          'uid', 'displayName', 'username', 'usernameNormalized', 'photoURL', 'bio', 'updatedAt'
+        ])
+        && request.resource.data.uid == resource.data.uid
+        && request.resource.data.username == resource.data.username
+        && request.resource.data.usernameNormalized == resource.data.usernameNormalized
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
+          'displayName', 'photoURL', 'bio', 'updatedAt'
+        ])
+        && validPublicProfile(request.resource.data)
+        && request.resource.data.updatedAt == request.time
+        && request.resource.data.displayName == getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.displayName
+        && request.resource.data.bio == getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.bio
+        && request.resource.data.photoURL == getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.photoURL;
+
+      allow delete: if false;
+    }
+
+    match /usernames/{usernameNormalized} {
+      // Permite a leitura pontual usada pela transação de reserva, sem listar a coleção.
+      allow get: if true;
+      allow list: if false;
+
+      allow create: if signedIn()
+        && request.resource.data.keys().hasOnly(['uid', 'createdAt'])
+        && request.resource.data.keys().hasAll(['uid', 'createdAt'])
+        && request.resource.data.uid == request.auth.uid
+        && request.resource.data.createdAt == request.time
+        && getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.usernameNormalized == usernameNormalized
+        && getAfter(/databases/$(database)/documents/profiles/$(usernameNormalized)).data.uid == request.auth.uid;
+
+      allow update, delete: if false;
+    }
+
+    match /posts/{postId} {
+      allow get, list: if isEmailVerified()
+        && (isModerator() || resource.data.status == 'published');
+
+      allow create: if isEmailVerified()
+        && validPostFields(request.resource.data)
+        && validNewPost(request.resource.data);
+
+      allow update: if isEmailVerified()
+        && validPostFields(request.resource.data)
+        && ((resource.data.authorUid == request.auth.uid
+          && validPostUpdate(request.resource.data, resource.data))
+          || (isModerator()
+            && validModeratorPostUpdate(request.resource.data, resource.data)));
+
+      allow delete: if false;
+    }
+
+    match /posts/{postId}/replies/{replyId} {
+      allow get, list: if isEmailVerified()
+        && (isModerator()
+          || (publishedPost(postId) && resource.data.status == 'published'));
+
+      allow create: if isEmailVerified()
+        && publishedPost(postId)
+        && validReplyFields(request.resource.data)
+        && validNewReply(request.resource.data);
+
+      allow update: if isEmailVerified()
+        && validReplyFields(request.resource.data)
+        && ((publishedPost(postId)
+          && resource.data.authorUid == request.auth.uid
+          && validReplyUpdate(request.resource.data, resource.data))
+          || (isModerator()
+            && validModeratorReplyUpdate(request.resource.data, resource.data)));
+
+      allow delete: if false;
+    }
+
+    match /posts/{postId}/helpful/{uid} {
+      allow get, list: if isEmailVerified() && publishedPost(postId);
+
+      allow create: if isEmailVerified()
+        && publishedPost(postId)
+        && validHelpfulFields(uid, request.resource.data);
+
+      allow update: if false;
+
+      allow delete: if isEmailVerified()
+        && publishedPost(postId)
+        && request.auth.uid == uid;
+    }
+
+    match /posts/{postId}/replies/{replyId}/helpful/{uid} {
+      allow get, list: if isEmailVerified() && publishedReply(postId, replyId);
+
+      allow create: if isEmailVerified()
+        && publishedReply(postId, replyId)
+        && validHelpfulFields(uid, request.resource.data);
+
+      allow update: if false;
+
+      allow delete: if isEmailVerified()
+        && publishedReply(postId, replyId)
+        && request.auth.uid == uid;
+    }
+
+    match /reports/{reportId} {
+      allow get: if isEmailVerified()
+        && (resource.data.reporterUid == request.auth.uid || isModerator());
+      allow list: if isEmailVerified() && isModerator();
+
+      allow create: if isEmailVerified()
+        && validReportFields(request.resource.data)
+        && validNewReport(reportId, request.resource.data);
+
+      allow update: if isEmailVerified() && isModerator()
+        && validReportFields(request.resource.data)
+        && validReportReview(request.resource.data, resource.data);
+
+      allow delete: if false;
+    }
+
+    // Catálogo público: somente os metadados necessários para descobrir cursos.
+    match /tracks/{trackId} {
+      allow get, list: if resource.data.status == 'published';
+      allow create, update, delete: if false;
+    }
+
+    match /courses/{courseId} {
+      allow get, list: if resource.data.status == 'published';
+      allow create, update, delete: if false;
+    }
+
+    // A ementa é preparada pelo seed e não contém steps, respostas ou conteúdo integral de aula.
+    match /courseCatalogs/{courseId} {
+      allow get, list: if resource.data.status == 'published';
+      allow create, update, delete: if false;
+    }
+
+    // O material pedagógico completo permanece autenticado, mesmo quando publicado.
+    match /modules/{moduleId} {
+      allow get, list: if isEmailVerified() && resource.data.status == 'published';
+      allow create, update, delete: if false;
+    }
+
+    match /lessons/{lessonId} {
+      allow get, list: if isEmailVerified() && resource.data.status == 'published';
+      allow create, update, delete: if false;
+    }
+
+    match /activities/{activityId} {
+      allow get, list: if isEmailVerified() && resource.data.status == 'published';
+      allow create, update, delete: if false;
+    }
+
+    match /practicalExercises/{exerciseId} {
+      allow get, list: if isEmailVerified() && resource.data.status == 'published';
+      allow create, update, delete: if false;
+    }
+
+    match /concepts/{conceptId} {
+      allow get, list: if isEmailVerified() && resource.data.status == 'published';
+      allow create, update, delete: if false;
+    }
+
+  }
+}
