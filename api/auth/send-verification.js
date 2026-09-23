@@ -1,31 +1,9 @@
-import { cert, getApp, initializeApp } from 'firebase-admin/app';
-import { getAuth } from 'firebase-admin/auth';
+import { getAdminAuth, getRequiredEnvironmentValue } from '../_lib/firebaseAdmin.js';
 
-const ADMIN_APP_NAME = 'learndev-verification';
 const VERIFICATION_CONTINUE_URL = 'https://learndev.com.br/verificar-email';
 const RESEND_ENDPOINT = 'https://api.resend.com/emails';
 const RESEND_SENDER = 'LearnDev <noreply@learndev.com.br>';
 const RESEND_SUBJECT = 'Confirme seu e-mail — LearnDev';
-
-function getRequiredEnvironmentValue(name) {
-  const value = process.env[name]?.trim();
-  if (!value) throw new Error('Configuração de e-mail indisponível.');
-  return value;
-}
-
-function getAdminApp() {
-  try {
-    return getApp(ADMIN_APP_NAME);
-  } catch {
-    const projectId = getRequiredEnvironmentValue('FIREBASE_PROJECT_ID');
-    const clientEmail = getRequiredEnvironmentValue('FIREBASE_CLIENT_EMAIL');
-    const privateKey = getRequiredEnvironmentValue('FIREBASE_PRIVATE_KEY').replace(/\\n/g, '\n');
-
-    return initializeApp({
-      credential: cert({ projectId, clientEmail, privateKey }),
-    }, ADMIN_APP_NAME);
-  }
-}
 
 function escapeHtml(value) {
   return String(value)
@@ -94,7 +72,7 @@ export default async function handler(request, response) {
   let userRecord;
 
   try {
-    adminAuth = getAuth(getAdminApp());
+    adminAuth = getAdminAuth();
   } catch {
     return sendError(response, 500, 'verification/server-unavailable', 'O serviço de confirmação está indisponível no momento. Tente novamente mais tarde.');
   }

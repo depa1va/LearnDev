@@ -39,8 +39,11 @@ service cloud.firestore {
       return data.bio is string && data.bio.size() <= 280;
     }
 
-    function validPhotoURL(data) {
-      return data.photoURL is string && data.photoURL.size() <= 2048;
+    function validPhotoURL(data, uid) {
+      return data.photoURL is string
+        && data.photoURL.size() <= 2048
+        && (data.photoURL == ''
+          || data.photoURL.matches('^https://res\\.cloudinary\\.com/b2uxjyfv/image/upload/([A-Za-z0-9_,.-]+/)*learndev/avatars/' + uid + '\\.(jpg|jpeg|png|webp)$'));
     }
 
     function validOnboarding(data) {
@@ -70,10 +73,15 @@ service cloud.firestore {
           && data.privacyVersion == '2026-09');
     }
 
-    function validUserDocument(data) {
+    function validShowLearningInfo(data) {
+      return !data.keys().hasAny(['showLearningInfo'])
+        || data.showLearningInfo is bool;
+    }
+
+    function validUserDocument(data, uid) {
       return validDisplayName(data)
         && validBio(data)
-        && validPhotoURL(data)
+        && validPhotoURL(data, uid)
         && data.role is string
         && data.role in ['student', 'moderator', 'admin']
         && data.username is string
@@ -81,17 +89,63 @@ service cloud.firestore {
         && data.username == data.usernameNormalized
         && data.usernameNormalized.matches('^[a-z0-9_]{3,20}$')
         && validOnboarding(data)
+        && validShowLearningInfo(data)
         && validLegalAcceptance(data);
+    }
+
+    function validPublicLearningInfo(data) {
+      return data.showLearningInfo is bool
+        && ((data.showLearningInfo == false
+          && !data.keys().hasAny(['experienceLevel', 'learningGoal']))
+          || (data.showLearningInfo == true
+            && data.keys().hasAll(['experienceLevel', 'learningGoal'])
+            && data.experienceLevel in ['never-programmed', 'some-contact', 'basic-knowledge']
+            && data.learningGoal in ['learn-from-zero', 'web-development', 'review-knowledge', 'build-projects']));
     }
 
     function validPublicProfile(data) {
       return validDisplayName(data)
         && validBio(data)
-        && validPhotoURL(data)
+        && data.uid is string
+        && validPhotoURL(data, data.uid)
         && data.username is string
         && data.usernameNormalized is string
         && data.username == data.usernameNormalized
-        && data.usernameNormalized.matches('^[a-z0-9_]{3,20}$');
+        && data.usernameNormalized.matches('^[a-z0-9_]{3,20}$')
+        && data.createdAt is timestamp
+        && validPublicLearningInfo(data);
+    }
+
+    function validFollowFields(data) {
+      return data.keys().hasOnly(['followerUid', 'targetUid', 'createdAt'])
+        && data.keys().hasAll(['followerUid', 'targetUid', 'createdAt'])
+        && data.followerUid is string
+        && data.targetUid is string
+        && data.createdAt is timestamp;
+    }
+
+    function validNewFollow(followId, data) {
+      return validFollowFields(data)
+        && data.followerUid == request.auth.uid
+        && data.targetUid != request.auth.uid
+        && followId == request.auth.uid + '_' + data.targetUid
+        && data.createdAt == request.time
+        && exists(/databases/$(database)/documents/users/$(data.targetUid));
+    }
+
+    function validNotificationReadUpdate(data, previousData) {
+      return previousData.keys().hasOnly(['type', 'actorUid', 'read', 'createdAt', 'source'])
+        && previousData.keys().hasAll(['type', 'actorUid', 'read', 'createdAt', 'source'])
+        && data.keys().hasOnly(['type', 'actorUid', 'read', 'createdAt', 'source', 'readAt'])
+        && data.keys().hasAll(['type', 'actorUid', 'read', 'createdAt', 'source', 'readAt'])
+        && previousData.read == false
+        && data.read == true
+        && data.readAt == request.time
+        && data.type == previousData.type
+        && data.actorUid == previousData.actorUid
+        && data.source == previousData.source
+        && data.createdAt == previousData.createdAt
+        && data.diff(previousData).affectedKeys().hasOnly(['read', 'readAt']);
     }
 
     function validLessonProgressFields(data) {
@@ -625,17 +679,19 @@ service cloud.firestore {
         && request.resource.data.keys().hasOnly([
           'displayName', 'username', 'usernameNormalized', 'photoURL', 'bio',
           'role', 'emailVerified', 'onboardingCompleted', 'experienceLevel', 'learningGoal',
+          'showLearningInfo',
           'termsAcceptedAt', 'termsVersion', 'privacyAcceptedAt', 'privacyVersion',
           'createdAt', 'updatedAt'
         ])
         && request.resource.data.keys().hasAll([
           'displayName', 'username', 'usernameNormalized', 'photoURL', 'bio',
           'role', 'emailVerified', 'onboardingCompleted', 'experienceLevel', 'learningGoal',
+          'showLearningInfo',
           'termsAcceptedAt', 'termsVersion', 'privacyAcceptedAt', 'privacyVersion',
           'createdAt', 'updatedAt'
         ])
         && request.resource.data.role == 'student'
-        && validUserDocument(request.resource.data)
+        && validUserDocument(request.resource.data, uid)
         && request.resource.data.emailVerified == false
         && request.resource.data.termsAcceptedAt == request.time
         && request.resource.data.termsVersion == '2026-09'
@@ -647,7 +703,9 @@ service cloud.firestore {
         && getAfter(/databases/$(database)/documents/profiles/$(request.resource.data.usernameNormalized)).data.uid == request.auth.uid
         && getAfter(/databases/$(database)/documents/profiles/$(request.resource.data.usernameNormalized)).data.displayName == request.resource.data.displayName
         && getAfter(/databases/$(database)/documents/profiles/$(request.resource.data.usernameNormalized)).data.bio == request.resource.data.bio
-        && getAfter(/databases/$(database)/documents/profiles/$(request.resource.data.usernameNormalized)).data.photoURL == request.resource.data.photoURL;
+        && getAfter(/databases/$(database)/documents/profiles/$(request.resource.data.usernameNormalized)).data.photoURL == request.resource.data.photoURL
+        && getAfter(/databases/$(database)/documents/profiles/$(request.resource.data.usernameNormalized)).data.showLearningInfo == request.resource.data.showLearningInfo
+        && getAfter(/databases/$(database)/documents/profiles/$(request.resource.data.usernameNormalized)).data.createdAt == request.resource.data.createdAt;
 
       allow update: if isOwner(uid)
         // Antes da verificação, permite apenas sincronizar o estado do e-mail.
@@ -659,14 +717,15 @@ service cloud.firestore {
         && request.resource.data.keys().hasOnly([
           'displayName', 'username', 'usernameNormalized', 'photoURL', 'bio',
           'role', 'emailVerified', 'onboardingCompleted', 'experienceLevel', 'learningGoal',
+          'showLearningInfo',
           'termsAcceptedAt', 'termsVersion', 'privacyAcceptedAt', 'privacyVersion',
           'createdAt', 'updatedAt'
         ])
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
           'displayName', 'photoURL', 'bio', 'emailVerified', 'onboardingCompleted',
-          'experienceLevel', 'learningGoal', 'updatedAt'
+          'experienceLevel', 'learningGoal', 'showLearningInfo', 'updatedAt'
         ])
-        && validUserDocument(request.resource.data)
+        && validUserDocument(request.resource.data, uid)
         && request.resource.data.role == resource.data.role
         && request.resource.data.username == resource.data.username
         && request.resource.data.usernameNormalized == resource.data.usernameNormalized
@@ -676,7 +735,9 @@ service cloud.firestore {
         && request.resource.data.updatedAt == request.time
         && getAfter(/databases/$(database)/documents/profiles/$(resource.data.usernameNormalized)).data.displayName == request.resource.data.displayName
         && getAfter(/databases/$(database)/documents/profiles/$(resource.data.usernameNormalized)).data.bio == request.resource.data.bio
-        && getAfter(/databases/$(database)/documents/profiles/$(resource.data.usernameNormalized)).data.photoURL == request.resource.data.photoURL;
+        && getAfter(/databases/$(database)/documents/profiles/$(resource.data.usernameNormalized)).data.photoURL == request.resource.data.photoURL
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['showLearningInfo'])
+          || getAfter(/databases/$(database)/documents/profiles/$(resource.data.usernameNormalized)).data.showLearningInfo == request.resource.data.showLearningInfo);
 
       allow delete: if false;
     }
@@ -733,44 +794,83 @@ service cloud.firestore {
       allow delete: if false;
     }
 
+    match /users/{uid}/notifications/{notificationId} {
+      allow read: if isEmailVerified() && isOwner(uid);
+
+      // As notificações são criadas exclusivamente pela API com Firebase Admin.
+      allow create: if false;
+
+      allow update: if isEmailVerified()
+        && isOwner(uid)
+        && validNotificationReadUpdate(request.resource.data, resource.data);
+
+      allow delete: if false;
+    }
+
     match /profiles/{usernameNormalized} {
       allow read: if true;
 
       allow create: if signedIn()
         && usernameNormalized == request.resource.data.usernameNormalized
         && request.resource.data.keys().hasOnly([
-          'uid', 'displayName', 'username', 'usernameNormalized', 'photoURL', 'bio', 'updatedAt'
+          'uid', 'displayName', 'username', 'usernameNormalized', 'photoURL', 'bio',
+          'experienceLevel', 'learningGoal', 'showLearningInfo', 'createdAt', 'updatedAt'
         ])
         && request.resource.data.keys().hasAll([
-          'uid', 'displayName', 'username', 'usernameNormalized', 'photoURL', 'bio', 'updatedAt'
+          'uid', 'displayName', 'username', 'usernameNormalized', 'photoURL', 'bio',
+          'showLearningInfo', 'createdAt', 'updatedAt'
         ])
         && request.resource.data.uid == request.auth.uid
         && validPublicProfile(request.resource.data)
         && request.resource.data.updatedAt == request.time
+        && request.resource.data.createdAt == getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.createdAt
         && request.resource.data.username == getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.username
         && request.resource.data.usernameNormalized == getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.usernameNormalized
         && request.resource.data.displayName == getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.displayName
         && request.resource.data.bio == getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.bio
-        && request.resource.data.photoURL == getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.photoURL;
+        && request.resource.data.photoURL == getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.photoURL
+        && request.resource.data.showLearningInfo == getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.showLearningInfo
+        && (!request.resource.data.showLearningInfo
+          || (request.resource.data.experienceLevel == getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.experienceLevel
+            && request.resource.data.learningGoal == getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.learningGoal));
 
       allow update: if isEmailVerified()
         && resource.data.uid == request.auth.uid
         && request.resource.data.keys().hasOnly([
-          'uid', 'displayName', 'username', 'usernameNormalized', 'photoURL', 'bio', 'updatedAt'
+          'uid', 'displayName', 'username', 'usernameNormalized', 'photoURL', 'bio',
+          'experienceLevel', 'learningGoal', 'showLearningInfo', 'createdAt', 'updatedAt'
         ])
         && request.resource.data.uid == resource.data.uid
         && request.resource.data.username == resource.data.username
         && request.resource.data.usernameNormalized == resource.data.usernameNormalized
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly([
-          'displayName', 'photoURL', 'bio', 'updatedAt'
+          'displayName', 'photoURL', 'bio', 'experienceLevel', 'learningGoal',
+          'showLearningInfo', 'createdAt', 'updatedAt'
         ])
         && validPublicProfile(request.resource.data)
         && request.resource.data.updatedAt == request.time
+        && request.resource.data.createdAt == getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.createdAt
         && request.resource.data.displayName == getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.displayName
         && request.resource.data.bio == getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.bio
-        && request.resource.data.photoURL == getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.photoURL;
+        && request.resource.data.photoURL == getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.photoURL
+        && request.resource.data.showLearningInfo == getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.showLearningInfo
+        && (!request.resource.data.showLearningInfo
+          || (request.resource.data.experienceLevel == getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.experienceLevel
+            && request.resource.data.learningGoal == getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.learningGoal));
 
       allow delete: if false;
+    }
+
+    match /follows/{followId} {
+      allow get, list: if isEmailVerified();
+
+      allow create: if isEmailVerified()
+        && validNewFollow(followId, request.resource.data);
+
+      allow update: if false;
+
+      allow delete: if isEmailVerified()
+        && resource.data.followerUid == request.auth.uid;
     }
 
     match /usernames/{usernameNormalized} {

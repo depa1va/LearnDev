@@ -17,6 +17,7 @@ import ProgressPage from './pages/app/ProgressPage';
 import SettingsPage from './pages/app/SettingsPage';
 import TrackDetailPage from './pages/app/TrackDetailPage';
 import TracksPage from './pages/app/TracksPage';
+import UserSearchPage from './pages/app/UserSearchPage';
 import PasswordRecoveryPage from './pages/auth/PasswordRecoveryPage';
 import SignInPage from './pages/auth/SignInPage';
 import SignUpPage from './pages/auth/SignUpPage';
@@ -26,6 +27,7 @@ import TermsPage from './pages/legal/TermsPage';
 import PrivacyPage from './pages/legal/PrivacyPage';
 import NotFoundPage from './pages/NotFoundPage';
 import OnboardingPage from './pages/app/OnboardingPage';
+import NotificationsPage from './pages/app/NotificationsPage';
 import OnboardingRoute from './routes/OnboardingRoute';
 import ModeratorRoute from './routes/ModeratorRoute';
 import ProtectedRoute from './routes/ProtectedRoute';
@@ -60,11 +62,13 @@ export default function App(): React.JSX.Element {
               <Route element={<AppLayout />}>
                 <Route path="dashboard" element={<DashboardPage />} />
                 <Route path="progresso" element={<ProgressPage />} />
+                <Route path="notificacoes" element={<NotificationsPage />} />
                 <Route path="aulas/:lessonId" element={<LessonPage />} />
                 <Route path="atividades/:activityId" element={<ActivityPage />} />
                 <Route path="praticas/:exerciseId" element={<PracticePage />} />
                 <Route path="comunidade" element={<CommunityPage />} />
                 <Route path="comunidade/posts/:postId" element={<PostPage />} />
+                <Route path="usuarios" element={<UserSearchPage />} />
                 <Route element={<ModeratorRoute />}>
                   <Route path="moderacao" element={<ModerationPage />} />
                 </Route>

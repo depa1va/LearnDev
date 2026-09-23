@@ -10,6 +10,7 @@ export type LearningGoal = 'learn-from-zero' | 'web-development' | 'review-knowl
 export interface ProfileFormValues {
   displayName: string;
   bio: string;
+  showLearningInfo: boolean;
 }
 
 export type ProfileFieldValidation =
@@ -32,6 +33,7 @@ export interface UserAccount extends FirestoreDocument, TimestampedDocument {
   onboardingCompleted?: boolean;
   experienceLevel?: ExperienceLevel | '';
   learningGoal?: LearningGoal | '';
+  showLearningInfo?: boolean;
   termsAcceptedAt?: Timestamp;
   termsVersion?: string;
   privacyAcceptedAt?: Timestamp;
@@ -45,4 +47,7 @@ export interface PublicUserProfile extends FirestoreDocument, TimestampedDocumen
   usernameNormalized?: string;
   photoURL?: string;
   bio?: string;
+  experienceLevel?: ExperienceLevel;
+  learningGoal?: LearningGoal;
+  showLearningInfo?: boolean;
 }

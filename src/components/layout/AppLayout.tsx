@@ -1,9 +1,10 @@
-import { useState, type MouseEventHandler, type ReactElement } from 'react';
-import { BarChart3, BookOpen, LogOut, Menu, MessageCircle, Settings, ShieldCheck, X, type LucideIcon } from 'lucide-react';
+import { useEffect, useState, type MouseEventHandler, type ReactElement } from 'react';
+import { BarChart3, Bell, BookOpen, LogOut, Menu, MessageCircle, Search, Settings, ShieldCheck, X, type LucideIcon } from 'lucide-react';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import Brand from './Brand';
 import { useAuth } from '../../providers/AuthProvider';
 import { ThemeToggle } from '../ui/ThemeControls';
+import { getUnreadNotificationCount, NOTIFICATIONS_UPDATED_EVENT } from '../../services/notificationService';
 
 interface NavigationItem {
   label: string;
@@ -13,6 +14,7 @@ interface NavigationItem {
 
 interface NavigationProps {
   canModerate: boolean;
+  unreadNotificationCount: number;
   onNavigate?: MouseEventHandler<HTMLAnchorElement>;
   compact?: boolean;
 }
@@ -22,9 +24,11 @@ const navigation: readonly NavigationItem[] = [
   { label: 'Trilhas', to: '/trilhas', icon: BookOpen },
   { label: 'Progresso', to: '/progresso', icon: BarChart3 },
   { label: 'Comunidade', to: '/comunidade', icon: MessageCircle },
+  { label: 'Notificações', to: '/notificacoes', icon: Bell },
+  { label: 'Pessoas', to: '/usuarios', icon: Search },
 ];
 
-function Navigation({ canModerate, onNavigate, compact = false }: NavigationProps): ReactElement {
+function Navigation({ canModerate, unreadNotificationCount, onNavigate, compact = false }: NavigationProps): ReactElement {
   const items = canModerate
     ? [...navigation, { label: 'Moderação', to: '/moderacao', icon: ShieldCheck }]
     : navigation;
@@ -41,7 +45,8 @@ function Navigation({ canModerate, onNavigate, compact = false }: NavigationProp
           }`}
         >
           <Icon className="w-4 h-4" />
-          {label}
+          <span>{label}</span>
+          {to === '/notificacoes' && unreadNotificationCount > 0 && <span className="ml-auto inline-flex min-w-5 items-center justify-center rounded-full bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold leading-none text-primary">{unreadNotificationCount > 9 ? '9+' : unreadNotificationCount}</span>}
         </NavLink>
       ))}
     </nav>
@@ -52,7 +57,35 @@ export default function AppLayout(): ReactElement {
   const [menuOpen, setMenuOpen] = useState(false);
   const [isLoggingOut, setIsLoggingOut] = useState(false);
   const navigate = useNavigate();
-  const { canModerate, logout } = useAuth();
+  const { canModerate, logout, user } = useAuth();
+  const [unreadNotificationCount, setUnreadNotificationCount] = useState(0);
+
+  useEffect(() => {
+    let active = true;
+    if (!user) {
+      setUnreadNotificationCount(0);
+      return () => {
+        active = false;
+      };
+    }
+
+    function loadUnreadCount(): void {
+      void getUnreadNotificationCount()
+        .then((count) => {
+          if (active) setUnreadNotificationCount(count);
+        })
+        .catch(() => {
+          if (active) setUnreadNotificationCount(0);
+        });
+    }
+
+    loadUnreadCount();
+    window.addEventListener(NOTIFICATIONS_UPDATED_EVENT, loadUnreadCount);
+    return () => {
+      active = false;
+      window.removeEventListener(NOTIFICATIONS_UPDATED_EVENT, loadUnreadCount);
+    };
+  }, [user?.uid]);
 
   async function handleLogout() {
     if (isLoggingOut) return;
@@ -69,7 +102,7 @@ export default function AppLayout(): ReactElement {
     <div className="min-h-screen bg-mist">
       <aside className="hidden lg:flex fixed inset-y-0 left-0 z-30 w-56 flex-col border-r border-ink/5 bg-white px-4 py-5">
         <Brand className="mb-7 px-1" />
-        <Navigation canModerate={canModerate} compact />
+        <Navigation canModerate={canModerate} unreadNotificationCount={unreadNotificationCount} compact />
         <div className="mt-auto flex items-center justify-between rounded-xl px-3 py-2.5 text-sm font-semibold text-ink/60">
           <span>Aparência</span>
           <ThemeToggle />
@@ -96,7 +129,7 @@ export default function AppLayout(): ReactElement {
 
       {menuOpen && (
         <div className="lg:hidden fixed inset-x-0 top-[73px] z-20 border-b border-ink/5 bg-white px-5 py-5 shadow-soft">
-          <Navigation canModerate={canModerate} onNavigate={() => setMenuOpen(false)} />
+          <Navigation canModerate={canModerate} unreadNotificationCount={unreadNotificationCount} onNavigate={() => setMenuOpen(false)} />
           <NavLink to="/configuracoes" onClick={() => setMenuOpen(false)} className="mt-2 flex items-center gap-3 rounded-xl px-4 py-3 text-sm font-semibold text-ink/60 hover:bg-mist hover:text-primary">
             <Settings className="w-4 h-4" />
             Configurações

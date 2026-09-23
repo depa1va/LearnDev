@@ -24,6 +24,7 @@ import {
 } from 'firebase/firestore';
 import { auth } from '../lib/firebase/auth';
 import { db } from '../lib/firebase/firestore';
+import { processSocialNotification } from './notificationService';
 import type {
   CommunityPost,
   CommunityPostInput,
@@ -108,6 +109,7 @@ export const REPORT_REASONS: ReadonlyArray<ReportReasonOption> = [
 
 const PROFILE_QUERY_LIMIT = 30;
 const MODERATION_REPORTS_PAGE_SIZE = 20;
+const AUTHOR_POSTS_PAGE_SIZE = 10;
 
 export const REPORT_STATUS_LABELS: Readonly<Record<ReportStatus, string>> = {
   open: 'Aberta',
@@ -434,6 +436,34 @@ export async function getPostById(postId: string | undefined): Promise<Community
   return post?.status === 'published' ? post : null;
 }
 
+export async function getPostsByAuthor(authorUid: string): Promise<CommunityPost[]> {
+  const firestore = requireFirestore();
+  const normalizedAuthorUid = authorUid.trim();
+  if (!normalizedAuthorUid) return [];
+
+  const snapshot = await getDocs(query(
+    collection(firestore, 'posts'),
+    where('authorUid', '==', normalizedAuthorUid),
+    where('status', '==', 'published'),
+    orderBy('createdAt', 'desc'),
+    limit(AUTHOR_POSTS_PAGE_SIZE),
+  ));
+  return snapshot.docs.map(mapCommunityPost).filter(isDefined);
+}
+
+export async function getPublishedPostCountByAuthor(authorUid: string): Promise<number> {
+  const firestore = requireFirestore();
+  const normalizedAuthorUid = authorUid.trim();
+  if (!normalizedAuthorUid) return 0;
+
+  const snapshot = await getCountFromServer(query(
+    collection(firestore, 'posts'),
+    where('authorUid', '==', normalizedAuthorUid),
+    where('status', '==', 'published'),
+  ));
+  return snapshot.data().count;
+}
+
 export async function createPost(values: CommunityPostInput): Promise<CreatedCommunityPost> {
   const { firestore, uid: authorUid } = requireCommunityAccess();
   const data = validatePostInput(values);
@@ -445,6 +475,7 @@ export async function createPost(values: CommunityPostInput): Promise<CreatedCom
     createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   });
+  void processSocialNotification({ event: 'post', postId: reference.id });
   return { id: reference.id, ...data, authorUid };
 }
 
@@ -489,6 +520,7 @@ export async function createReply(postId: string, value: string): Promise<Create
       createdAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
     });
+    void processSocialNotification({ event: 'reply', postId: safePostId, replyId: reference.id });
     return { id: reference.id, postId: safePostId, authorUid, body };
   } catch (error: unknown) {
     console.error('[community:createReply] Firestore write failed', {
@@ -561,8 +593,14 @@ async function toggleHelpful({ postId, replyId = null, isHelpful }: ToggleHelpfu
   const reference = helpfulReference(firestore, { postId, replyId, uid });
 
   try {
-    if (isHelpful) await deleteDoc(reference);
-    else await setDoc(reference, { uid, createdAt: serverTimestamp() });
+    if (isHelpful) {
+      await deleteDoc(reference);
+    } else {
+      await setDoc(reference, { uid, createdAt: serverTimestamp() });
+      void processSocialNotification(replyId
+        ? { event: 'helpful_reply', postId, replyId }
+        : { event: 'helpful_post', postId });
+    }
     return !isHelpful;
   } catch (error: unknown) {
     throw communityActionError(error, 'Não foi possível atualizar a reação agora.');

@@ -1,5 +1,5 @@
+import { useEffect, useState, type ReactElement } from 'react';
 import { cn } from '../../utils/cn';
-import type { ReactElement } from 'react';
 
 type AvatarSize = 'sm' | 'md' | 'lg';
 
@@ -15,6 +15,12 @@ interface AvatarProps {
 const sizes: Record<AvatarSize, string> = { sm: 'w-8 h-8 text-xs', md: 'w-11 h-11 text-sm', lg: 'w-16 h-16 text-lg' };
 
 export default function Avatar({ initials, photoURL = '', color = 'bg-primary', size = 'md', ring = false, className }: AvatarProps): ReactElement {
+  const [imageFailed, setImageFailed] = useState(false);
+
+  useEffect(() => {
+    setImageFailed(false);
+  }, [photoURL]);
+
   return (
     <div
       className={cn(
@@ -25,7 +31,7 @@ export default function Avatar({ initials, photoURL = '', color = 'bg-primary', 
         className
       )}
     >
-      {photoURL ? <img src={photoURL} alt="" className="h-full w-full rounded-full object-cover" /> : initials}
+      {photoURL && !imageFailed ? <img src={photoURL} alt="" onError={() => setImageFailed(true)} className="h-full w-full rounded-full object-cover" /> : initials}
     </div>
   );
 }

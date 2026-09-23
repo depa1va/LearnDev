@@ -194,6 +194,7 @@ export async function registerUser({
         onboardingCompleted: false,
         experienceLevel: '',
         learningGoal: '',
+        showLearningInfo: false,
         termsAcceptedAt: serverTimestamp(),
         termsVersion: TERMS_VERSION,
         privacyAcceptedAt: serverTimestamp(),
@@ -208,6 +209,8 @@ export async function registerUser({
         usernameNormalized: normalizedUsername,
         photoURL: '',
         bio: '',
+        showLearningInfo: false,
+        createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
     });
