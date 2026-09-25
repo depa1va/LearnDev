@@ -166,6 +166,14 @@ function getRouteMetadata(pathname: string): RouteMetadata {
     };
   }
 
+  if (pathname === '/sobre') {
+    return {
+      title: 'Sobre | LearnDev',
+      description: 'Conheça o LearnDev, seus objetivos, funcionalidades e a equipe responsável pelo desenvolvimento da plataforma.',
+      robots: 'index, follow',
+    };
+  }
+
   if (pathname === '/entrar') return { title: 'Entrar | LearnDev' };
   if (pathname === '/cadastro') return { title: 'Criar conta | LearnDev' };
   if (pathname === '/recuperar-senha') return { title: 'Recuperar senha | LearnDev' };

@@ -76,6 +76,7 @@ export default function VerifyEmailPage(): ReactElement {
     setStatus('');
     setIsResending(true);
     try {
+      // A tela delega ao authService o POST autenticado de verificação; o destinatário é resolvido pelo servidor a partir do token.
       await resendVerificationEmail();
       setStatus('Novo e-mail de verificação enviado. Confira também a pasta de spam.');
     } catch (resendError: unknown) {

@@ -1,21 +1,29 @@
-import { useState } from 'react';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useEffect, useState } from 'react';
 import { AlertCircle, ArrowRight, AtSign, LockKeyhole, Mail, UserRound } from 'lucide-react';
+import { useForm } from 'react-hook-form';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../../providers/AuthProvider';
-import { getAuthErrorMessage, registerUser, validateUsername } from '../../services/authService';
+import { signUpSchema, type SignUpFormValues } from '../../schemas/auth';
+import {
+  checkUsernameAvailability,
+  getAuthErrorMessage,
+  normalizeUsername,
+  registerUser,
+  validateUsername,
+} from '../../services/authService';
 import AuthCard from './AuthCard';
 import AuthField from './AuthField';
-import type { FormEvent, ReactElement } from 'react';
+import type { ReactElement } from 'react';
 
-interface SignUpForm {
-  displayName: string;
-  username: string;
-  email: string;
-  password: string;
-  passwordConfirmation: string;
+type UsernameAvailabilityStatus = 'idle' | 'checking' | 'available' | 'unavailable' | 'error';
+
+interface UsernameAvailabilityState {
+  normalizedUsername: string;
+  status: UsernameAvailabilityStatus;
 }
 
-const initialForm: SignUpForm = { displayName: '', username: '', email: '', password: '', passwordConfirmation: '' };
+const USERNAME_AVAILABILITY_DEBOUNCE_MS = 450;
 
 function PasswordStrength({ password }: { password: string }): ReactElement | null {
   if (!password) return null;
@@ -39,49 +47,76 @@ function PasswordStrength({ password }: { password: string }): ReactElement | nu
 export default function SignUpPage(): ReactElement {
   const navigate = useNavigate();
   const { isConfigured, configurationMissing } = useAuth();
-  const [form, setForm] = useState(initialForm);
-  const [hasAcceptedLegalTerms, setHasAcceptedLegalTerms] = useState(false);
   const [error, setError] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [usernameAvailability, setUsernameAvailability] = useState<UsernameAvailabilityState>({
+    normalizedUsername: '',
+    status: 'idle',
+  });
+  const {
+    register,
+    handleSubmit,
+    watch,
+    formState: { errors, isSubmitting },
+  } = useForm<SignUpFormValues>({
+    resolver: zodResolver(signUpSchema),
+    defaultValues: {
+      displayName: '',
+      username: '',
+      email: '',
+      password: '',
+      passwordConfirmation: '',
+      hasAcceptedLegalTerms: false,
+    },
+  });
+  const password = watch('password');
+  const passwordConfirmation = watch('passwordConfirmation');
+  const hasAcceptedLegalTerms = watch('hasAcceptedLegalTerms');
+  const username = watch('username');
+  const normalizedUsername = normalizeUsername(username);
+  const usernameIsValid = validateUsername(normalizedUsername) === null;
+  const availabilityStatus = usernameAvailability.normalizedUsername === normalizedUsername && usernameIsValid
+    ? usernameAvailability.status
+    : 'idle';
 
-  function updateField(field: keyof SignUpForm, value: string): void {
-    setForm((current) => ({ ...current, [field]: value }));
-  }
+  useEffect(() => {
+    if (!isConfigured || !usernameIsValid) {
+      setUsernameAvailability({ normalizedUsername, status: 'idle' });
+      return;
+    }
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
-    event.preventDefault();
+    let isCurrent = true;
+    setUsernameAvailability({ normalizedUsername, status: 'checking' });
+    const timeoutId = window.setTimeout(() => {
+      void checkUsernameAvailability(normalizedUsername)
+        .then((isAvailable) => {
+          if (!isCurrent) return;
+          setUsernameAvailability({
+            normalizedUsername,
+            status: isAvailable ? 'available' : 'unavailable',
+          });
+        })
+        .catch(() => {
+          if (!isCurrent) return;
+          setUsernameAvailability({ normalizedUsername, status: 'error' });
+        });
+    }, USERNAME_AVAILABILITY_DEBOUNCE_MS);
+
+    return () => {
+      isCurrent = false;
+      window.clearTimeout(timeoutId);
+    };
+  }, [isConfigured, normalizedUsername, usernameIsValid]);
+
+  async function onSubmit({ displayName, username, email, password, hasAcceptedLegalTerms: hasAcceptedLegalTermsValue }: SignUpFormValues): Promise<void> {
     if (!isConfigured || isSubmitting) return;
-
-    if (form.displayName.trim().length < 2 || form.displayName.trim().length > 80) {
-      setError('Informe um nome entre 2 e 80 caracteres.');
-      return;
-    }
-
-    const usernameError = validateUsername(form.username);
-    if (usernameError) {
-      setError(usernameError);
-      return;
-    }
-
-    if (form.password.length < 6) {
-      setError('Use uma senha com pelo menos 6 caracteres.');
-      return;
-    }
-
-    if (form.password !== form.passwordConfirmation) {
-      setError('A confirmação de senha não corresponde à senha informada.');
-      return;
-    }
+    if (availabilityStatus === 'unavailable') return;
 
     setError('');
-    setIsSubmitting(true);
     try {
-      const result = await registerUser({ ...form, hasAcceptedLegalTerms });
+      const result = await registerUser({ displayName, username, email, password, hasAcceptedLegalTerms: hasAcceptedLegalTermsValue });
       navigate('/verificar-email', { replace: true, state: { verificationEmailSent: result.verificationEmailSent } });
     } catch (submissionError: unknown) {
       setError(getAuthErrorMessage(submissionError, 'Não foi possível criar sua conta. Tente novamente.'));
-    } finally {
-      setIsSubmitting(false);
     }
   }
 
@@ -91,22 +126,23 @@ export default function SignUpPage(): ReactElement {
 
   return (
     <AuthCard eyebrow="Cadastro" title="Crie sua conta" description="Organize seus estudos, pratique e retome o aprendizado quando quiser." notice={configurationNotice} footer={<><span>Já possui uma conta? </span><Link to="/entrar" className="font-semibold text-primary hover:text-primary-700">Entrar</Link></>}>
-      <form className="space-y-5" onSubmit={handleSubmit}>
-        <AuthField label="Nome completo" icon={UserRound} required disabled={!isConfigured || isSubmitting} value={form.displayName} onChange={(event) => updateField('displayName', event.target.value)} type="text" autoComplete="name" placeholder="Como você quer ser chamado(a)?" />
-        <AuthField label="Nome de usuário" icon={AtSign} required disabled={!isConfigured || isSubmitting} value={form.username} onChange={(event) => updateField('username', event.target.value)} type="text" autoComplete="username" placeholder="exemplo_dev" hint="De 3 a 20 caracteres: letras, números e underscore." />
-        <AuthField label="E-mail" icon={Mail} required disabled={!isConfigured || isSubmitting} value={form.email} onChange={(event) => updateField('email', event.target.value)} type="email" autoComplete="email" placeholder="voce@exemplo.com" />
+      <form className="space-y-5" onSubmit={handleSubmit(onSubmit)} noValidate>
+        <AuthField label="Nome completo" icon={UserRound} required disabled={!isConfigured || isSubmitting} type="text" autoComplete="name" placeholder="Como você quer ser chamado(a)?" feedback={errors.displayName ? { tone: 'error', text: errors.displayName.message } : undefined} {...register('displayName')} />
+        <AuthField label="Nome de usuário" icon={AtSign} required disabled={!isConfigured || isSubmitting} type="text" autoComplete="username" placeholder="exemplo_dev" hint="De 3 a 20 caracteres: letras, números e underscore." feedback={errors.username ? { tone: 'error', text: errors.username.message } : availabilityStatus === 'checking' ? { tone: 'muted', text: 'Verificando disponibilidade...' } : availabilityStatus === 'available' ? { tone: 'success', text: 'Nome de usuário disponível.' } : availabilityStatus === 'unavailable' ? { tone: 'error', text: 'Esse nome de usuário já está em uso.' } : availabilityStatus === 'error' ? { tone: 'muted', text: 'Não foi possível verificar agora. Você ainda pode tentar criar a conta.' } : undefined} {...register('username')} />
+        <AuthField label="E-mail" icon={Mail} required disabled={!isConfigured || isSubmitting} type="email" autoComplete="email" placeholder="voce@exemplo.com" feedback={errors.email ? { tone: 'error', text: errors.email.message } : undefined} {...register('email')} />
 
         <div className="border-t border-ink/10 pt-5">
-          <AuthField label="Senha" icon={LockKeyhole} required disabled={!isConfigured || isSubmitting} value={form.password} onChange={(event) => updateField('password', event.target.value)} type="password" autoComplete="new-password" placeholder="Crie uma senha" hint="A senha precisa ter pelo menos 6 caracteres." />
-          <PasswordStrength password={form.password} />
+          <AuthField label="Senha" icon={LockKeyhole} required disabled={!isConfigured || isSubmitting} type="password" autoComplete="new-password" placeholder="Crie uma senha" hint="A senha precisa ter pelo menos 6 caracteres." feedback={errors.password ? { tone: 'error', text: errors.password.message } : undefined} {...register('password')} />
+          <PasswordStrength password={password} />
         </div>
 
-        <AuthField label="Confirmar senha" icon={LockKeyhole} required disabled={!isConfigured || isSubmitting} value={form.passwordConfirmation} onChange={(event) => updateField('passwordConfirmation', event.target.value)} type="password" autoComplete="new-password" placeholder="Repita sua senha" feedback={form.passwordConfirmation ? (form.password === form.passwordConfirmation ? { tone: 'success', text: 'As senhas coincidem.' } : { tone: 'error', text: 'As senhas ainda não coincidem.' }) : undefined} />
+        <AuthField label="Confirmar senha" icon={LockKeyhole} required disabled={!isConfigured || isSubmitting} type="password" autoComplete="new-password" placeholder="Repita sua senha" feedback={errors.passwordConfirmation ? { tone: 'error', text: errors.passwordConfirmation.message } : passwordConfirmation ? (password === passwordConfirmation ? { tone: 'success', text: 'As senhas coincidem.' } : { tone: 'error', text: 'As senhas ainda não coincidem.' }) : undefined} {...register('passwordConfirmation')} />
 
         <div className="flex items-start gap-3 border-t border-ink/10 pt-5 text-sm leading-relaxed text-ink/70">
-          <input id="legal-acceptance" required checked={hasAcceptedLegalTerms} disabled={!isConfigured || isSubmitting} onChange={(event) => setHasAcceptedLegalTerms(event.target.checked)} type="checkbox" className="mt-0.5 h-4 w-4 shrink-0 rounded border-ink/30 text-primary focus:ring-primary disabled:cursor-not-allowed" />
+          <input id="legal-acceptance" required disabled={!isConfigured || isSubmitting} aria-invalid={errors.hasAcceptedLegalTerms ? true : undefined} aria-describedby={errors.hasAcceptedLegalTerms ? 'legal-acceptance-feedback' : undefined} type="checkbox" className="mt-0.5 h-4 w-4 shrink-0 rounded border-ink/30 text-primary focus:ring-primary disabled:cursor-not-allowed" {...register('hasAcceptedLegalTerms')} />
           <p><label htmlFor="legal-acceptance" className="cursor-pointer">Li e aceito os </label><Link to="/termos" className="font-semibold text-primary hover:text-primary-700">Termos de Uso</Link><label htmlFor="legal-acceptance" className="cursor-pointer"> e a </label><Link to="/privacidade" className="font-semibold text-primary hover:text-primary-700">Política de Privacidade</Link><label htmlFor="legal-acceptance" className="cursor-pointer">.</label></p>
         </div>
+        {errors.hasAcceptedLegalTerms && <p id="legal-acceptance-feedback" role="alert" className="-mt-3 text-xs font-medium text-red-700">{errors.hasAcceptedLegalTerms.message}</p>}
         {error && <p role="alert" className="flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm leading-relaxed text-red-700"><AlertCircle aria-hidden="true" className="mt-0.5 h-4 w-4 shrink-0" />{error}</p>}
         <button disabled={!isConfigured || isSubmitting || !hasAcceptedLegalTerms} type="submit" className="inline-flex h-12 w-full items-center justify-center gap-2 rounded-xl bg-primary px-5 text-sm font-semibold text-white shadow-soft transition-colors hover:bg-primary-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"><span>{isSubmitting ? 'Criando conta...' : 'Criar minha conta'}</span>{!isSubmitting && <ArrowRight aria-hidden="true" className="h-4 w-4" />}</button>
       </form>

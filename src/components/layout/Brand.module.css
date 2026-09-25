@@ -1,0 +1,36 @@
+.brand {
+  display: flex;
+  align-items: center;
+  gap: var(--radius-sm);
+}
+
+.mark {
+  display: flex;
+  width: 2.25rem;
+  height: 2.25rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  background-color: var(--color-primary);
+  color: #ffffff;
+  box-shadow: var(--shadow-md);
+}
+
+.wordmark {
+  color: var(--color-text);
+  font-family: var(--font-heading);
+  font-size: var(--font-size-lg);
+  font-weight: 700;
+}
+
+.accent {
+  color: var(--color-primary);
+}
+
+.lightWordmark {
+  color: #ffffff;
+}
+
+.lightWordmark .accent {
+  color: var(--color-primary-100);
+}

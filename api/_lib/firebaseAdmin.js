@@ -10,7 +10,11 @@ export function getRequiredEnvironmentValue(name) {
   return value;
 }
 
-/** Reutiliza uma única instância Firebase Admin por execução da função Vercel. */
+/**
+ * Integração exclusiva do servidor: reutiliza uma instância Firebase Admin por execução da Vercel.
+ * FIREBASE_PROJECT_ID, FIREBASE_CLIENT_EMAIL e FIREBASE_PRIVATE_KEY são obtidos apenas de process.env
+ * e não são importados por src/, portanto não podem ser incluídos no bundle do navegador.
+ */
 export function getAdminApp() {
   try {
     return getApp(ADMIN_APP_NAME);

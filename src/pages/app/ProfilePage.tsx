@@ -334,6 +334,7 @@ export default function ProfilePage(): ReactElement {
       if (wasFollowing) {
         await unfollowUser(targetUid);
       } else {
+        // followUser persiste a relação e solicita de modo não bloqueante a API de notificações para o perfil seguido.
         await followUser(targetUid);
       }
 

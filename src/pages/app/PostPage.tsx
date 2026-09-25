@@ -1,5 +1,7 @@
 import { CheckCircle2, FileQuestion, Flag, Lightbulb, Pencil, Send, Trash2 } from 'lucide-react';
-import { useEffect, useState, type FormEvent } from 'react';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useEffect, useState } from 'react';
+import { useForm } from 'react-hook-form';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import CommunityPostForm from '../../components/community/CommunityPostForm';
 import HelpfulButton from '../../components/community/HelpfulButton';
@@ -11,6 +13,7 @@ import EmptyState from '../../components/ui/EmptyState';
 import GlassCard from '../../components/ui/GlassCard';
 import { PageFrame, PageIntro } from '../../components/ui/PageFrame';
 import { useAuth } from '../../providers/AuthProvider';
+import { replySchema, type ReplyFormValues } from '../../schemas/community';
 import {
   COMMUNITY_LIMITS,
   createReport,
@@ -100,30 +103,37 @@ function AuthorIdentity({ profile }: { profile: PublicUserProfile | undefined })
 }
 
 function ReplyComposer({ onSubmit }: { onSubmit: (body: string) => Promise<void> }) {
-  const [body, setBody] = useState('');
-  const [isSaving, setIsSaving] = useState(false);
   const [error, setError] = useState('');
+  const {
+    register,
+    handleSubmit,
+    reset,
+    watch,
+    formState: { errors, isSubmitting: isSaving },
+  } = useForm<ReplyFormValues>({
+    resolver: zodResolver(replySchema),
+    defaultValues: { body: '' },
+  });
+  const body = watch('body') ?? '';
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
-    event.preventDefault();
+  async function submitReply({ body: replyBody }: ReplyFormValues): Promise<void> {
     if (isSaving) return;
-    setIsSaving(true);
+    if (typeof replyBody !== 'string') return;
     setError('');
     try {
-      await onSubmit(body);
-      setBody('');
+      await onSubmit(replyBody);
+      reset({ body: '' });
     } catch (submitError: unknown) {
       setError(submitError instanceof Error ? submitError.message : 'Não foi possível enviar sua resposta agora.');
-    } finally {
-      setIsSaving(false);
     }
   }
 
   return (
-    <form onSubmit={handleSubmit} noValidate>
+    <form onSubmit={handleSubmit(submitReply)} noValidate>
       <label className="block text-sm font-semibold text-ink">Escreva uma resposta
-        <textarea value={body} onChange={(event) => { setBody(event.target.value); setError(''); }} disabled={isSaving} required minLength={COMMUNITY_LIMITS.replyBody.min} maxLength={COMMUNITY_LIMITS.replyBody.max} rows={6} placeholder="Compartilhe uma explicação, uma sugestão ou uma pergunta complementar." className="mt-2 w-full resize-y rounded-xl border border-ink/10 bg-mist px-4 py-3 text-ink placeholder:text-ink/35 focus:border-primary focus:outline-none disabled:cursor-not-allowed disabled:opacity-60" />
+        <textarea {...register('body', { onChange: () => setError('') })} disabled={isSaving} aria-invalid={errors.body ? 'true' : undefined} aria-describedby={errors.body ? 'reply-body-error' : undefined} required minLength={COMMUNITY_LIMITS.replyBody.min} maxLength={COMMUNITY_LIMITS.replyBody.max} rows={6} placeholder="Compartilhe uma explicação, uma sugestão ou uma pergunta complementar." className="mt-2 w-full resize-y rounded-xl border border-ink/10 bg-mist px-4 py-3 text-ink placeholder:text-ink/35 focus:border-primary focus:outline-none disabled:cursor-not-allowed disabled:opacity-60" />
         <span className="mt-2 block text-right text-xs font-normal text-ink/45">{body.length}/{COMMUNITY_LIMITS.replyBody.max}</span>
+        {errors.body && <span id="reply-body-error" role="alert" className="mt-2 block text-sm font-normal text-red-700">{errors.body.message}</span>}
       </label>
       {error && <p role="alert" className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
       <button type="submit" disabled={isSaving} className="mt-5 inline-flex items-center gap-2 rounded-full bg-primary px-5 py-3 text-sm font-semibold text-white shadow-soft hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-60"><Send aria-hidden="true" className="h-4 w-4" />{isSaving ? 'Enviando...' : 'Publicar resposta'}</button>
@@ -146,34 +156,44 @@ interface ReplyCardProps {
 function ReplyCard({ reply, author, isAuthor, onUpdate, onDelete, helpful, onToggleHelpful, onReport, isReported }: ReplyCardProps) {
   const [isEditing, setIsEditing] = useState(false);
   const [isConfirmingDelete, setIsConfirmingDelete] = useState(false);
-  const [body, setBody] = useState(reply.body);
-  const [isSaving, setIsSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [error, setError] = useState('');
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors, isSubmitting },
+  } = useForm<ReplyFormValues>({
+    resolver: zodResolver(replySchema),
+    defaultValues: { body: reply.body },
+  });
+  const isSaving = isSubmitting || isDeleting;
 
-  async function handleEdit(event: FormEvent<HTMLFormElement>): Promise<void> {
-    event.preventDefault();
+  useEffect(() => {
+    reset({ body: reply.body });
+  }, [reply.body, reset]);
+
+  async function submitEditedReply({ body: updatedBody }: ReplyFormValues): Promise<void> {
     if (isSaving) return;
-    setIsSaving(true);
+    if (typeof updatedBody !== 'string') return;
     setError('');
     try {
-      await onUpdate(reply.id, body);
+      await onUpdate(reply.id, updatedBody);
       setIsEditing(false);
     } catch (updateError: unknown) {
       setError(updateError instanceof Error ? updateError.message : 'Não foi possível editar a resposta agora.');
-    } finally {
-      setIsSaving(false);
     }
   }
 
   async function handleDelete(): Promise<void> {
     if (isSaving) return;
-    setIsSaving(true);
+    setIsDeleting(true);
     setError('');
     try {
       await onDelete(reply.id);
     } catch (deleteError: unknown) {
       setError(deleteError instanceof Error ? deleteError.message : 'Não foi possível excluir a resposta agora.');
-      setIsSaving(false);
+      setIsDeleting(false);
     }
   }
 
@@ -184,17 +204,18 @@ function ReplyCard({ reply, author, isAuthor, onUpdate, onDelete, helpful, onTog
         <div className="flex flex-wrap items-center gap-3">
           <p className="text-xs font-medium text-ink/50">{formatStudyDateTime(reply.createdAt)}</p>
           {isAuthor && !isEditing && <>
-            <button type="button" onClick={() => { setBody(reply.body); setIsEditing(true); setError(''); }} className="inline-flex items-center gap-1 text-sm font-semibold text-primary hover:text-primary-700"><Pencil aria-hidden="true" className="h-4 w-4" />Editar</button>
+            <button type="button" onClick={() => { reset({ body: reply.body }); setIsEditing(true); setError(''); }} className="inline-flex items-center gap-1 text-sm font-semibold text-primary hover:text-primary-700"><Pencil aria-hidden="true" className="h-4 w-4" />Editar</button>
             <button type="button" onClick={() => setIsConfirmingDelete(true)} className="inline-flex items-center gap-1 text-sm font-semibold text-red-700 hover:text-red-900"><Trash2 aria-hidden="true" className="h-4 w-4" />Excluir</button>
           </>}
         </div>
       </div>
-      {isEditing ? <form onSubmit={handleEdit} noValidate className="mt-5">
+      {isEditing ? <form onSubmit={handleSubmit(submitEditedReply)} noValidate className="mt-5">
         <label className="sr-only" htmlFor={`reply-${reply.id}`}>Editar resposta</label>
-        <textarea id={`reply-${reply.id}`} value={body} onChange={(event) => { setBody(event.target.value); setError(''); }} disabled={isSaving} minLength={COMMUNITY_LIMITS.replyBody.min} maxLength={COMMUNITY_LIMITS.replyBody.max} rows={5} className="w-full resize-y rounded-xl border border-ink/10 bg-mist px-4 py-3 text-ink focus:border-primary focus:outline-none disabled:cursor-not-allowed disabled:opacity-60" />
+        <textarea id={`reply-${reply.id}`} {...register('body', { onChange: () => setError('') })} disabled={isSaving} aria-invalid={errors.body ? 'true' : undefined} aria-describedby={errors.body ? `reply-${reply.id}-error` : undefined} minLength={COMMUNITY_LIMITS.replyBody.min} maxLength={COMMUNITY_LIMITS.replyBody.max} rows={5} className="w-full resize-y rounded-xl border border-ink/10 bg-mist px-4 py-3 text-ink focus:border-primary focus:outline-none disabled:cursor-not-allowed disabled:opacity-60" />
+        {errors.body && <p id={`reply-${reply.id}-error`} role="alert" className="mt-2 text-sm text-red-700">{errors.body.message}</p>}
         <div className="mt-4 flex flex-wrap gap-3">
           <button type="submit" disabled={isSaving} className="inline-flex items-center gap-2 rounded-full bg-primary px-4 py-2.5 text-sm font-semibold text-white hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-60"><CheckCircle2 aria-hidden="true" className="h-4 w-4" />{isSaving ? 'Salvando...' : 'Salvar resposta'}</button>
-          <button type="button" onClick={() => { setIsEditing(false); setBody(reply.body); setError(''); }} disabled={isSaving} className="rounded-full border-2 border-ink/15 px-4 py-2.5 text-sm font-semibold text-ink/70 hover:border-primary hover:text-primary">Cancelar</button>
+          <button type="button" onClick={() => { setIsEditing(false); reset({ body: reply.body }); setError(''); }} disabled={isSaving} className="rounded-full border-2 border-ink/15 px-4 py-2.5 text-sm font-semibold text-ink/70 hover:border-primary hover:text-primary">Cancelar</button>
         </div>
       </form> : <p className="mt-5 whitespace-pre-wrap leading-relaxed text-ink/75">{reply.body}</p>}
       {!isEditing && <div className="mt-6 flex flex-wrap items-center gap-3 border-t border-ink/5 pt-5">
@@ -316,6 +337,7 @@ export default function PostPage() {
 
   async function handleCreateReply(body: string): Promise<void> {
     if (!post) return;
+    // createReply aciona, após persistir a resposta, a API de notificações documentada com postId e replyId.
     const reply = await createReply(post.id, body);
 
     try {
@@ -377,6 +399,7 @@ export default function PostPage() {
     const previousHelpful = helpful.post.isHelpful;
     setHelpful((current) => ({ ...current, error: '', post: { ...current.post, isSaving: true } }));
     try {
+      // Ao marcar como útil, o communityService solicita a API de notificações somente após confirmar o marcador no Firestore.
       const isHelpful = await togglePostHelpful(post.id, previousHelpful);
       setHelpful((current) => ({
         ...current,
@@ -402,6 +425,7 @@ export default function PostPage() {
       return { ...current, error: '', replies };
     });
     try {
+      // A resposta usa o mesmo fluxo documentado, incluindo postId e replyId para validação server-side.
       const isHelpful = await toggleReplyHelpful(post.id, replyId, previous.isHelpful);
       setHelpful((current) => {
         const replies = new Map(current.replies);

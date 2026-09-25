@@ -23,7 +23,7 @@ export const navLinks: readonly NavigationLink[] = [
   { label: 'Como funciona', to: '/#como-funciona', sectionId: 'como-funciona' },
   { label: 'Trilhas', to: '/trilhas' },
   { label: 'Comunidade', to: '/comunidade' },
-  { label: 'Sobre', to: '/#sobre', sectionId: 'sobre' },
+  { label: 'Sobre', to: '/sobre' },
 ];
 
 export const learningPath: readonly LearningPathItem[] = [

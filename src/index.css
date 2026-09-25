@@ -2,12 +2,58 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  --color-background: #f8fafc;
+  --color-surface: #ffffff;
+  --color-surface-translucent: rgba(255, 255, 255, 0.8);
+  --color-surface-hover: #f8fafc;
+  --color-text: #0f172a;
+  --color-text-muted: #475569;
+  --color-primary: #2563eb;
+  --color-primary-hover: #1d4ed8;
+  --color-primary-50: #eff6ff;
+  --color-primary-100: #dbeafe;
+  --color-border: rgba(15, 23, 42, 0.1);
+  --color-border-subtle: rgba(15, 23, 42, 0.05);
+  --color-focus: #2563eb;
+  --color-grid-line: rgba(15, 23, 42, 0.05);
+  --color-code-surface: #0f172a;
+  --color-success: #22c55e;
+  --color-warning: #facc15;
+  --color-danger: #e11d48;
+  --color-scroll-track: #f8fafc;
+  --color-scroll-thumb: #cbd5e1;
+  --color-scroll-thumb-hover: #94a3b8;
+
+  --font-sans: 'Inter', sans-serif;
+  --font-heading: 'Poppins', sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace;
+  --font-size-xs: 0.75rem;
+  --font-size-sm: 0.875rem;
+  --font-size-base: 1rem;
+  --font-size-lg: 1.125rem;
+  --font-size-xl: 1.25rem;
+  --font-size-2xl: 1.5rem;
+  --font-size-3xl: 1.875rem;
+
+  --radius-sm: 0.5rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 1rem;
+  --radius-xl: 1.5rem;
+  --shadow-sm: 0 1px 2px 0 rgba(15, 23, 42, 0.08);
+  --shadow-md: 0 8px 30px -8px rgba(15, 23, 42, 0.15);
+  --shadow-glow: 0 0 40px -6px rgba(37, 99, 235, 0.4);
+}
+
 html {
   scroll-behavior: smooth;
 }
 
 body {
   overflow-x: hidden;
+  background-color: var(--color-background);
+  color: var(--color-text);
+  font-family: var(--font-sans);
   transition: background-color 180ms ease, color 180ms ease;
 }
 
@@ -19,11 +65,12 @@ body {
     @apply font-heading;
   }
   ::selection {
-    @apply bg-primary/20 text-ink;
+    background-color: color-mix(in srgb, var(--color-primary) 20%, transparent);
+    color: var(--color-text);
   }
   a:focus-visible,
   button:focus-visible {
-    outline: 2px solid #2563eb;
+    outline: 2px solid var(--color-focus);
     outline-offset: 2px;
     border-radius: 4px;
   }
@@ -31,8 +78,8 @@ body {
 
 @layer utilities {
   .bg-grid {
-    background-image: linear-gradient(to right, rgba(15, 23, 42, 0.05) 1px, transparent 1px),
-      linear-gradient(to bottom, rgba(15, 23, 42, 0.05) 1px, transparent 1px);
+    background-image: linear-gradient(to right, var(--color-grid-line) 1px, transparent 1px),
+      linear-gradient(to bottom, var(--color-grid-line) 1px, transparent 1px);
     background-size: 44px 44px;
   }
   .text-gradient {
@@ -51,39 +98,58 @@ body {
   width: 10px;
 }
 ::-webkit-scrollbar-track {
-  background: #f8fafc;
+  background: var(--color-scroll-track);
 }
 ::-webkit-scrollbar-thumb {
-  background: #cbd5e1;
+  background: var(--color-scroll-thumb);
   border-radius: 999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #94a3b8;
+  background: var(--color-scroll-thumb-hover);
 }
 
 /* Tema escuro: mapeia os tokens visuais já usados pela interface para superfícies, textos e estados equivalentes. */
 html.dark {
-  background: #0b1220;
+  --color-background: #0b1220;
+  --color-surface: #162235;
+  --color-surface-translucent: rgba(22, 34, 53, 0.92);
+  --color-surface-hover: #22314a;
+  --color-text: #e5edf8;
+  --color-text-muted: #b8c5d7;
+  --color-primary: #93c5fd;
+  --color-primary-hover: #bfdbfe;
+  --color-primary-50: #172d4a;
+  --color-primary-100: #dbeafe;
+  --color-border: rgba(148, 163, 184, 0.28);
+  --color-border-subtle: rgba(148, 163, 184, 0.28);
+  --color-focus: #93c5fd;
+  --color-grid-line: rgba(148, 163, 184, 0.12);
+  --color-code-surface: #07101f;
+  --color-scroll-track: #0b1220;
+  --color-scroll-thumb: #334155;
+  --color-scroll-thumb-hover: #475569;
+
+  background: var(--color-background);
 }
 
 html.dark body {
-  background: #0b1220;
-  color: #e2e8f0;
+  background: var(--color-background);
+  color: var(--color-text);
 }
 
 html.dark .bg-mist {
-  background-color: #0b1220;
+  background-color: var(--color-background);
 }
 
 html.dark .bg-white {
-  background-color: #162235;
+  background-color: var(--color-surface);
 }
 
 html.dark .bg-white\/70,
 html.dark .bg-white\/75,
 html.dark .bg-white\/80,
 html.dark .bg-white\/90 {
-  background-color: rgba(22, 34, 53, 0.92);
+  background-color: var(--color-surface-translucent);
 }
 
 html.dark .bg-white\/5,
@@ -93,7 +159,7 @@ html.dark .bg-white\/25 {
 }
 
 html.dark .text-ink {
-  color: #e5edf8;
+  color: var(--color-text);
 }
 
 html.dark .text-ink\/30 { color: rgba(226, 232, 240, 0.34); }
@@ -112,11 +178,11 @@ html.dark .border-ink\/8,
 html.dark .border-ink\/10,
 html.dark .border-ink\/15,
 html.dark .border-ink\/20 {
-  border-color: rgba(148, 163, 184, 0.28);
+  border-color: var(--color-border);
 }
 
 html.dark .bg-ink {
-  background-color: #07101f;
+  background-color: var(--color-code-surface);
 }
 
 html.dark .bg-ink\/5,
@@ -124,8 +190,8 @@ html.dark .bg-ink\/8 {
   background-color: rgba(148, 163, 184, 0.14);
 }
 
-html.dark .text-primary { color: #93c5fd; }
-html.dark .text-primary-700 { color: #bfdbfe; }
+html.dark .text-primary { color: var(--color-primary); }
+html.dark .text-primary-700 { color: var(--color-primary-hover); }
 html.dark .text-primary\/20 { color: rgba(147, 197, 253, 0.28); }
 html.dark .text-primary\/40 { color: rgba(147, 197, 253, 0.48); }
 html.dark .text-primary\/60 { color: rgba(147, 197, 253, 0.68); }
@@ -186,29 +252,29 @@ html.dark .hover\:text-primary-700:hover { color: #bfdbfe; }
 html.dark .hover\:text-red-900:hover { color: #fecdd3; }
 
 html.dark .bg-grid {
-  background-image: linear-gradient(to right, rgba(148, 163, 184, 0.12) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(148, 163, 184, 0.12) 1px, transparent 1px);
+  background-image: linear-gradient(to right, var(--color-grid-line) 1px, transparent 1px),
+    linear-gradient(to bottom, var(--color-grid-line) 1px, transparent 1px);
 }
 
 html.dark ::selection {
-  color: #07101f;
+  color: var(--color-code-surface);
 }
 
 html.dark a:focus-visible,
 html.dark button:focus-visible {
-  outline-color: #93c5fd;
+  outline-color: var(--color-focus);
 }
 
 html.dark ::-webkit-scrollbar-track {
-  background: #0b1220;
+  background: var(--color-scroll-track);
 }
 
 html.dark ::-webkit-scrollbar-thumb {
-  background: #334155;
+  background: var(--color-scroll-thumb);
 }
 
 html.dark ::-webkit-scrollbar-thumb:hover {
-  background: #475569;
+  background: var(--color-scroll-thumb-hover);
 }
 
 @media (prefers-reduced-motion: reduce) {

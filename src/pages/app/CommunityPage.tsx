@@ -134,6 +134,7 @@ export default function CommunityPage() {
   }
 
   function handleCreatePost(values: CommunityPostInput): Promise<CreatedCommunityPost> {
+    // A criação também aciona, pelo communityService, a API documentada de notificações com o ID do post persistido.
     return createPost(values);
   }
 

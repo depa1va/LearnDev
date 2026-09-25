@@ -18,8 +18,9 @@ export default {
         mint: '#22C55E',
       },
       fontFamily: {
-        heading: ['Poppins', 'sans-serif'],
-        body: ['Inter', 'sans-serif'],
+        heading: ['var(--font-heading)'],
+        body: ['var(--font-sans)'],
+        mono: ['var(--font-mono)'],
       },
       keyframes: {
         float: {
@@ -46,8 +47,8 @@ export default {
         shine: 'shine 2s ease-in-out infinite',
       },
       boxShadow: {
-        soft: '0 8px 30px -8px rgba(15, 23, 42, 0.15)',
-        glow: '0 0 40px -6px rgba(37, 99, 235, 0.4)',
+        soft: 'var(--shadow-md)',
+        glow: 'var(--shadow-glow)',
       },
     },
   },

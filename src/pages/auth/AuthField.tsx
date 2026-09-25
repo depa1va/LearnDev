@@ -1,5 +1,5 @@
 import { CheckCircle2, Eye, EyeOff } from 'lucide-react';
-import { useId, useState } from 'react';
+import { forwardRef, useId, useState } from 'react';
 import type { InputHTMLAttributes, ReactElement, ReactNode } from 'react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -27,7 +27,7 @@ interface AuthFieldProps extends Omit<InputHTMLAttributes<HTMLInputElement>, 'cl
   className?: string;
 }
 
-export default function AuthField({
+const AuthField = forwardRef<HTMLInputElement, AuthFieldProps>(function AuthField({
   label,
   icon: Icon,
   type = 'text',
@@ -37,7 +37,7 @@ export default function AuthField({
   disabled = false,
   className = '',
   ...inputProps
-}: AuthFieldProps): ReactElement {
+}, ref): ReactElement {
   const generatedId = useId();
   const inputId = id ?? generatedId;
   const hintId = hint ? `${inputId}-hint` : undefined;
@@ -45,7 +45,7 @@ export default function AuthField({
   const [isPasswordVisible, setIsPasswordVisible] = useState(false);
   const canTogglePassword = type === 'password';
   const resolvedType = canTogglePassword && isPasswordVisible ? 'text' : type;
-  const describedBy = [hintId, feedbackId].filter(Boolean).join(' ') || undefined;
+  const describedBy = [inputProps['aria-describedby'], hintId, feedbackId].filter(Boolean).join(' ') || undefined;
   const fieldStateClass = feedback?.tone === 'error'
     ? 'border-red-300 focus:border-red-500 focus:ring-red-100'
     : feedback?.tone === 'success'
@@ -61,6 +61,7 @@ export default function AuthField({
         {Icon && <Icon aria-hidden="true" className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-primary/70" />}
         <input
           {...inputProps}
+          ref={ref}
           id={inputId}
           type={resolvedType}
           disabled={disabled}
@@ -89,4 +90,8 @@ export default function AuthField({
       )}
     </div>
   );
-}
+});
+
+AuthField.displayName = 'AuthField';
+
+export default AuthField;

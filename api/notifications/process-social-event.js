@@ -26,10 +26,13 @@ function expectedEventError(error) {
 }
 
 /**
- * POST /api/notifications/process-social-event
+ * API: POST /api/notifications/process-social-event
+ *
+ * Objetivo: validar um evento social persistido e criar as notificações legítimas no Firebase Admin.
  * Autenticação: Authorization Bearer com Firebase ID Token verificado no servidor.
- * Corpo: evento social e IDs do recurso. actorUid nunca é aceito do cliente.
- * Retornos: 200 para evento processado/idempotente; 4xx para token ou dados inválidos; 5xx para falha interna.
+ * Corpo: event e os IDs do recurso afetado; actorUid nunca é aceito do cliente porque vem do token.
+ * Retorno: { processed: true, created: number } para evento processado/idempotente; { code, message }
+ * em falhas 4xx de sessão/dados ou 5xx de processamento.
  */
 export default async function handler(request, response) {
   response.setHeader('Cache-Control', 'no-store');

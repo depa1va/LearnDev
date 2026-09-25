@@ -22,9 +22,11 @@ function signCloudinaryParameters(parameters, apiSecret) {
 /**
  * POST /api/profile/remove-avatar
  *
- * Autenticação: Firebase ID Token em Authorization: Bearer. O public_id é derivado somente
- * do UID verificado, portanto o cliente não pode apagar a imagem de outra pessoa. A página
- * limpa primeiro a referência no Firestore; esta rota remove o asset correspondente no Cloudinary.
+ * Objetivo: apagar no Cloudinary o asset do avatar da própria conta.
+ * Autenticação: Firebase ID Token em Authorization: Bearer; não recebe corpo, UID ou public_id do cliente.
+ * Funcionamento: o public_id é derivado do UID verificado, portanto o cliente não remove imagem alheia.
+ * Retorno: { removed: true }; erros retornam { code, message } para sessão, autorização ou serviço externo.
+ * A página limpa primeiro a referência no Firestore; esta rota remove o asset correspondente no Cloudinary.
  */
 export default async function handler(request, response) {
   response.setHeader('Cache-Control', 'no-store');

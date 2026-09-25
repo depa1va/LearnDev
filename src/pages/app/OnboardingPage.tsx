@@ -1,7 +1,10 @@
 import { ArrowLeft, ArrowRight, CheckCircle2, Compass, Lightbulb, Sparkles, type LucideIcon } from 'lucide-react';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { useEffect, useState, type ReactNode } from 'react';
+import { Controller, useForm } from 'react-hook-form';
 import { Navigate, useNavigate } from 'react-router-dom';
 import { ThemeToggle } from '../../components/ui/ThemeControls';
+import { onboardingSchema, type OnboardingFormValues } from '../../schemas/onboarding';
 import { useAuth } from '../../providers/AuthProvider';
 import {
   completeOnboarding,
@@ -32,14 +35,15 @@ const goalOptions: ChoiceOption<LearningGoal>[] = [
 
 interface ChoiceCardProps<T extends string> {
   option: ChoiceOption<T>;
+  name: string;
   selected: boolean;
   onChange: (value: T) => void;
 }
 
-function ChoiceCard<T extends string>({ option, selected, onChange }: ChoiceCardProps<T>) {
+function ChoiceCard<T extends string>({ option, name, selected, onChange }: ChoiceCardProps<T>) {
   return (
     <label className={`block cursor-pointer rounded-2xl border p-5 transition-colors ${selected ? 'border-primary bg-primary/5 shadow-soft' : 'border-ink/10 bg-white hover:border-primary/40'}`}>
-      <input className="sr-only" type="radio" name="onboarding-choice" value={option.value} checked={selected} onChange={() => onChange(option.value)} />
+      <input className="sr-only" type="radio" name={name} value={option.value} checked={selected} onChange={() => onChange(option.value)} />
       <span className="flex items-start gap-3">
         <span aria-hidden="true" className={`mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full border ${selected ? 'border-primary bg-primary text-white' : 'border-ink/20 bg-white'}`}>
           {selected && <CheckCircle2 className="h-3.5 w-3.5" />}
@@ -68,13 +72,21 @@ export default function OnboardingPage() {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [step, setStep] = useState<OnboardingStepIndex>(0);
-  const [experienceLevel, setExperienceLevel] = useState<ExperienceLevel | ''>('');
-  const [learningGoal, setLearningGoal] = useState<LearningGoal | ''>('');
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState('');
-  const [isSaving, setIsSaving] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [completed, setCompleted] = useState(false);
+  const {
+    control,
+    handleSubmit,
+    reset,
+    watch,
+    formState: { errors, isSubmitting },
+  } = useForm<OnboardingFormValues>({
+    resolver: zodResolver(onboardingSchema),
+  });
+  const experienceLevel = watch('experienceLevel');
+  const learningGoal = watch('learningGoal');
 
   useEffect(() => {
     let active = true;
@@ -87,8 +99,10 @@ export default function OnboardingPage() {
           setCompleted(true);
           return;
         }
-        setExperienceLevel(isExperienceLevel(profile?.experienceLevel) ? profile.experienceLevel : '');
-        setLearningGoal(isLearningGoal(profile?.learningGoal) ? profile.learningGoal : '');
+        reset({
+          ...(isExperienceLevel(profile?.experienceLevel) ? { experienceLevel: profile.experienceLevel } : {}),
+          ...(isLearningGoal(profile?.learningGoal) ? { learningGoal: profile.learningGoal } : {}),
+        });
         setIsLoading(false);
       })
       .catch(() => {
@@ -101,21 +115,18 @@ export default function OnboardingPage() {
     return () => {
       active = false;
     };
-  }, [user]);
+  }, [reset, user]);
 
   if (completed) return <Navigate to="/dashboard" replace />;
 
-  async function finishOnboarding(): Promise<void> {
-    if (!user || !isExperienceLevel(experienceLevel) || !isLearningGoal(learningGoal) || isSaving) return;
+  async function finishOnboarding({ experienceLevel: selectedExperienceLevel, learningGoal: selectedLearningGoal }: OnboardingFormValues): Promise<void> {
+    if (!user || isSubmitting) return;
     setSaveError('');
-    setIsSaving(true);
     try {
-      await completeOnboarding(user.uid, { experienceLevel, learningGoal });
+      await completeOnboarding(user.uid, { experienceLevel: selectedExperienceLevel, learningGoal: selectedLearningGoal });
       navigate('/dashboard', { replace: true });
     } catch (error: unknown) {
       setSaveError(error instanceof Error ? error.message : 'Não foi possível salvar suas escolhas. Tente novamente.');
-    } finally {
-      setIsSaving(false);
     }
   }
 
@@ -133,7 +144,7 @@ export default function OnboardingPage() {
       eyebrow: 'Sua experiência',
       title: 'Como está sua relação com programação?',
       description: 'Isso é apenas uma referência inicial para o seu aprendizado. Ela não classifica nem compara estudantes.',
-      content: <fieldset className="space-y-3"><legend className="sr-only">Escolha sua experiência atual</legend>{experienceOptions.map((option) => <ChoiceCard<ExperienceLevel> key={option.value} option={option} selected={experienceLevel === option.value} onChange={(value) => setExperienceLevel(value)} />)}</fieldset>,
+      content: <fieldset className="space-y-3" aria-invalid={errors.experienceLevel ? 'true' : undefined} aria-describedby={errors.experienceLevel ? 'experience-level-error' : undefined}><legend className="sr-only">Escolha sua experiência atual</legend><Controller name="experienceLevel" control={control} render={({ field }) => <>{experienceOptions.map((option) => <ChoiceCard<ExperienceLevel> key={option.value} option={option} name={field.name} selected={field.value === option.value} onChange={field.onChange} />)}</>} />{errors.experienceLevel && <p id="experience-level-error" role="alert" className="text-sm text-red-700">{errors.experienceLevel.message}</p>}</fieldset>,
       nextLabel: 'Continuar',
     },
     {
@@ -141,7 +152,7 @@ export default function OnboardingPage() {
       eyebrow: 'Seu objetivo',
       title: 'O que você quer conquistar primeiro?',
       description: 'Você poderá ajustar seus caminhos de estudo conforme o LearnDev evoluir.',
-      content: <fieldset className="space-y-3"><legend className="sr-only">Escolha seu objetivo principal</legend>{goalOptions.map((option) => <ChoiceCard<LearningGoal> key={option.value} option={option} selected={learningGoal === option.value} onChange={(value) => setLearningGoal(value)} />)}</fieldset>,
+      content: <fieldset className="space-y-3" aria-invalid={errors.learningGoal ? 'true' : undefined} aria-describedby={errors.learningGoal ? 'learning-goal-error' : undefined}><legend className="sr-only">Escolha seu objetivo principal</legend><Controller name="learningGoal" control={control} render={({ field }) => <>{goalOptions.map((option) => <ChoiceCard<LearningGoal> key={option.value} option={option} name={field.name} selected={field.value === option.value} onChange={field.onChange} />)}</>} />{errors.learningGoal && <p id="learning-goal-error" role="alert" className="text-sm text-red-700">{errors.learningGoal.message}</p>}</fieldset>,
       nextLabel: 'Concluir e ir ao painel',
     },
   ];
@@ -177,8 +188,8 @@ export default function OnboardingPage() {
           <div className="mt-8">{currentStep.content}</div>
           {saveError && <p role="alert" className="mt-5 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{saveError}</p>}
           <div className="mt-8 flex flex-col-reverse gap-3 sm:flex-row sm:items-center sm:justify-between">
-            {step > 0 ? <button type="button" onClick={goBack} disabled={isSaving} className="inline-flex items-center justify-center gap-2 rounded-full px-5 py-3 text-sm font-semibold text-ink/65 hover:bg-mist disabled:opacity-50"><ArrowLeft className="h-4 w-4" />Voltar</button> : <span />}
-            <button type="button" onClick={step === 2 ? finishOnboarding : goForward} disabled={!canContinue || isSaving} className="inline-flex items-center justify-center gap-2 rounded-full bg-primary px-5 py-3 text-sm font-semibold text-white shadow-soft transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50">{isSaving ? 'Salvando...' : currentStep.nextLabel}<ArrowRight className="h-4 w-4" /></button>
+            {step > 0 ? <button type="button" onClick={goBack} disabled={isSubmitting} className="inline-flex items-center justify-center gap-2 rounded-full px-5 py-3 text-sm font-semibold text-ink/65 hover:bg-mist disabled:opacity-50"><ArrowLeft className="h-4 w-4" />Voltar</button> : <span />}
+            <button type="button" onClick={step === 2 ? () => { void handleSubmit(finishOnboarding)(); } : goForward} disabled={!canContinue || isSubmitting} className="inline-flex items-center justify-center gap-2 rounded-full bg-primary px-5 py-3 text-sm font-semibold text-white shadow-soft transition-colors hover:bg-primary-700 disabled:cursor-not-allowed disabled:opacity-50">{isSubmitting ? 'Salvando...' : currentStep.nextLabel}<ArrowRight className="h-4 w-4" /></button>
           </div>
         </>}
       </section>

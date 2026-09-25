@@ -178,8 +178,14 @@ export async function markAllNotificationsAsRead(): Promise<number> {
 }
 
 /**
- * Solicita ao endpoint autenticado que valide o evento social no Firestore e gere notificações.
- * Falhas são intencionalmente isoladas: a ação social principal já foi persistida no cliente.
+ * API: POST /api/notifications/process-social-event
+ *
+ * Objetivo: solicitar a criação server-side de notificações para follow, post, reply ou helpful.
+ * Autenticação: Firebase ID Token da sessão no header Authorization.
+ * Corpo: SocialNotificationPayload, contendo event e apenas os IDs do recurso afetado; actorUid é
+ * sempre derivado do token no servidor. Retorno: { processed: true, created: number } quando aceito.
+ * Erros relevantes: 401 para sessão inválida, 403 para conta sem e-mail verificado, 400 para evento
+ * inconsistente e 5xx para indisponibilidade. Falhas não desfazem a ação social principal já gravada.
  */
 export async function processSocialNotification(payload: SocialNotificationPayload): Promise<boolean> {
   const user = auth?.currentUser;

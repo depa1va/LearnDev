@@ -1,5 +1,7 @@
 import { CheckCircle2, ChevronRight, EyeOff, FileWarning, Flag, ShieldCheck, X } from 'lucide-react';
-import { useEffect, useRef, useState, type ChangeEvent } from 'react';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useEffect, useRef, useState } from 'react';
+import { useForm } from 'react-hook-form';
 import { Link } from 'react-router-dom';
 import type { DocumentData, QueryDocumentSnapshot } from 'firebase/firestore';
 import Avatar from '../../components/ui/Avatar';
@@ -7,6 +9,7 @@ import Badge from '../../components/ui/Badge';
 import EmptyState from '../../components/ui/EmptyState';
 import GlassCard from '../../components/ui/GlassCard';
 import { PageFrame, PageIntro } from '../../components/ui/PageFrame';
+import { moderationReviewSchema, type ModerationReviewFormValues } from '../../schemas/community';
 import { getModerationReportTargets, getOpenReports, getPublicProfilesByUids, getReportReasonLabel, reviewReport } from '../../services/communityService';
 import { getAvatarInitials } from '../../services/profileService';
 import { formatStudyDateTime } from '../../utils/date';
@@ -69,10 +72,19 @@ interface ModerationDialogProps {
 }
 
 function ModerationDialog({ report, context, isSubmitting, error, onClose, onSubmit }: ModerationDialogProps) {
-  const [note, setNote] = useState('');
   const headingRef = useRef<HTMLHeadingElement | null>(null);
   const targetIsPublished = context?.content?.status === 'published';
   const removeLabel = targetIsPublished ? 'Remover conteúdo' : 'Resolver denúncia';
+  const {
+    register,
+    handleSubmit,
+    watch,
+    formState: { errors },
+  } = useForm<ModerationReviewFormValues>({
+    resolver: zodResolver(moderationReviewSchema),
+    defaultValues: { resolutionNote: '' },
+  });
+  const note = watch('resolutionNote') ?? '';
 
   useEffect(() => {
     headingRef.current?.focus();
@@ -85,8 +97,8 @@ function ModerationDialog({ report, context, isSubmitting, error, onClose, onSub
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isSubmitting, onClose]);
 
-  function handleNoteChange(event: ChangeEvent<HTMLTextAreaElement>): void {
-    setNote(event.target.value);
+  function submitReview(action: ModerationAction): void {
+    void handleSubmit(({ resolutionNote }) => onSubmit(action, typeof resolutionNote === 'string' ? resolutionNote : ''))();
   }
 
   return (
@@ -103,16 +115,17 @@ function ModerationDialog({ report, context, isSubmitting, error, onClose, onSub
         <p className="mt-4 text-sm leading-relaxed text-ink/65">A denúncia é sobre uma {targetTypeLabel(report.targetType).toLowerCase()}. {targetIsPublished ? 'Remover o conteúdo também resolverá esta denúncia.' : 'O conteúdo não está mais publicado; ainda é possível registrar uma decisão.'}</p>
 
         <label className="mt-6 block text-sm font-semibold text-ink" htmlFor="moderation-note">Observação da moderação <span className="font-normal text-ink/50">(opcional)</span>
-          <textarea id="moderation-note" value={note} onChange={handleNoteChange} disabled={isSubmitting} maxLength={1000} rows={4} className="mt-2 w-full resize-y rounded-xl border border-ink/10 bg-mist px-4 py-3 text-ink focus:border-primary focus:outline-none disabled:cursor-not-allowed disabled:opacity-60" placeholder="Registre apenas o contexto necessário para a decisão." />
+          <textarea id="moderation-note" {...register('resolutionNote')} disabled={isSubmitting} aria-invalid={errors.resolutionNote ? 'true' : undefined} aria-describedby={errors.resolutionNote ? 'moderation-note-error' : undefined} maxLength={1000} rows={4} className="mt-2 w-full resize-y rounded-xl border border-ink/10 bg-mist px-4 py-3 text-ink focus:border-primary focus:outline-none disabled:cursor-not-allowed disabled:opacity-60" placeholder="Registre apenas o contexto necessário para a decisão." />
           <span className="mt-1 block text-right text-xs font-normal text-ink/45">{note.length}/1000</span>
+          {errors.resolutionNote && <span id="moderation-note-error" role="alert" className="mt-2 block text-sm font-normal text-red-700">{errors.resolutionNote.message}</span>}
         </label>
 
         {error && <p role="alert" className="mt-4 rounded-xl bg-red-50 px-4 py-3 text-sm text-red-800">{error}</p>}
 
         <div className="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
           <button type="button" onClick={onClose} disabled={isSubmitting} className="rounded-full border-2 border-ink/15 px-5 py-3 text-sm font-semibold text-ink/70 hover:border-primary hover:text-primary disabled:cursor-not-allowed disabled:opacity-60">Cancelar</button>
-          <button type="button" onClick={() => { void onSubmit('dismiss', note); }} disabled={isSubmitting} className="inline-flex items-center justify-center gap-2 rounded-full border-2 border-primary px-5 py-3 text-sm font-semibold text-primary hover:bg-primary hover:text-white disabled:cursor-not-allowed disabled:opacity-60"><CheckCircle2 aria-hidden="true" className="h-4 w-4" />Descartar denúncia</button>
-          <button type="button" onClick={() => { void onSubmit('remove', note); }} disabled={isSubmitting} className="inline-flex items-center justify-center gap-2 rounded-full bg-red-700 px-5 py-3 text-sm font-semibold text-white hover:bg-red-800 disabled:cursor-not-allowed disabled:opacity-60"><EyeOff aria-hidden="true" className="h-4 w-4" />{isSubmitting ? 'Salvando...' : removeLabel}</button>
+          <button type="button" onClick={() => submitReview('dismiss')} disabled={isSubmitting} className="inline-flex items-center justify-center gap-2 rounded-full border-2 border-primary px-5 py-3 text-sm font-semibold text-primary hover:bg-primary hover:text-white disabled:cursor-not-allowed disabled:opacity-60"><CheckCircle2 aria-hidden="true" className="h-4 w-4" />Descartar denúncia</button>
+          <button type="button" onClick={() => submitReview('remove')} disabled={isSubmitting} className="inline-flex items-center justify-center gap-2 rounded-full bg-red-700 px-5 py-3 text-sm font-semibold text-white hover:bg-red-800 disabled:cursor-not-allowed disabled:opacity-60"><EyeOff aria-hidden="true" className="h-4 w-4" />{isSubmitting ? 'Salvando...' : removeLabel}</button>
         </div>
       </section>
     </div>

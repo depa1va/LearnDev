@@ -69,6 +69,7 @@ export default function AvatarUploader({ initials, photoURL = '', disabled = fal
     setSuccess('');
 
     try {
+      // Integração de avatar: uploadAvatar documenta o POST autenticado para assinatura e o upload direto ao Cloudinary.
       const { secureUrl } = await uploadAvatar(selectedFile);
       await onUpload(secureUrl);
       clearSelection();

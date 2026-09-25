@@ -56,6 +56,15 @@ function sendError(response, status, code, message) {
   response.status(status).json({ code, message });
 }
 
+/**
+ * API: POST /api/auth/send-verification
+ *
+ * Objetivo: gerar um link Firebase Admin e enviar a verificação de e-mail pelo Resend.
+ * Autenticação: Authorization Bearer com Firebase ID Token. O destinatário é sempre o e-mail do
+ * usuário validado; a requisição não aceita destinatário nem corpo fornecido pelo cliente.
+ * Retorno: { sent: true } em sucesso; { code, message } para erros de sessão, conta já verificada,
+ * limite do Resend ou indisponibilidade. RESEND_API_KEY é lida somente em process.env no servidor.
+ */
 export default async function handler(request, response) {
   response.setHeader('Cache-Control', 'no-store');
 

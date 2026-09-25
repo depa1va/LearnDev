@@ -3,6 +3,7 @@ import { firebaseApp } from './app';
 
 let initialized = false;
 
+/** Inicializa o App Check com a site key pública do reCAPTCHA v3, quando a variável VITE_ estiver configurada. */
 export function initializeFirebaseAppCheck(): AppCheck | null {
   const siteKey = import.meta.env.VITE_FIREBASE_APP_CHECK_RECAPTCHA_SITE_KEY?.trim();
   if (!firebaseApp || !siteKey || initialized) return null;

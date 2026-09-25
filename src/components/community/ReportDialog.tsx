@@ -1,6 +1,9 @@
 import { Flag, X } from 'lucide-react';
-import { useEffect, useRef, useState, type FormEvent } from 'react';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useEffect, useRef, useState } from 'react';
+import { useForm } from 'react-hook-form';
 import { REPORT_REASONS } from '../../services/communityService';
+import { reportSchema, type ReportFormValues } from '../../schemas/community';
 import type { ReportReason } from '../../types/community';
 
 interface ReportSubmission {
@@ -15,12 +18,20 @@ interface ReportDialogProps {
 }
 
 export default function ReportDialog({ targetLabel, onClose, onSubmit }: ReportDialogProps) {
-  const [reason, setReason] = useState<ReportReason | ''>('');
-  const [details, setDetails] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [isComplete, setIsComplete] = useState(false);
   const titleRef = useRef<HTMLHeadingElement | null>(null);
+  const {
+    register,
+    handleSubmit,
+    watch,
+    formState: { errors, isSubmitting },
+  } = useForm<ReportFormValues>({
+    resolver: zodResolver(reportSchema),
+    defaultValues: { details: '' },
+  });
+  const reason = watch('reason');
+  const details = watch('details') ?? '';
 
   useEffect(() => {
     titleRef.current?.focus();
@@ -31,38 +42,17 @@ export default function ReportDialog({ targetLabel, onClose, onSubmit }: ReportD
     return () => document.removeEventListener('keydown', closeOnEscape);
   }, [isSubmitting, onClose]);
 
-  async function handleSubmit(event: FormEvent<HTMLFormElement>): Promise<void> {
-    event.preventDefault();
+  async function submitReport(values: ReportFormValues): Promise<void> {
     if (isSubmitting || isComplete) return;
-    if (!reason) {
-      setError('Escolha um motivo para a denúncia.');
-      return;
-    }
-    if (reason === 'other' && details.trim().length < 5) {
-      setError('Explique o motivo da denúncia em pelo menos 5 caracteres.');
-      return;
-    }
+    if (typeof values.details !== 'string') return;
 
-    setIsSubmitting(true);
     setError('');
     try {
-      await onSubmit({ reason, details });
+      await onSubmit({ reason: values.reason, details: values.details });
       setIsComplete(true);
     } catch (submitError: unknown) {
       setError(submitError instanceof Error ? submitError.message : 'Não foi possível enviar a denúncia agora.');
-    } finally {
-      setIsSubmitting(false);
     }
-  }
-
-  function isReportReason(value: string): value is ReportReason {
-    return REPORT_REASONS.some((item) => item.value === value);
-  }
-
-  function handleReasonChange(value: string): void {
-    if (value === '') setReason('');
-    else if (isReportReason(value)) setReason(value);
-    setError('');
   }
 
   return (
@@ -81,16 +71,18 @@ export default function ReportDialog({ targetLabel, onClose, onSubmit }: ReportD
           <p className="font-semibold">Denúncia enviada para análise.</p>
           <p className="mt-1">O conteúdo permanece disponível enquanto a análise não é realizada.</p>
           <button type="button" onClick={onClose} className="mt-4 rounded-full border border-green-700/30 px-4 py-2 text-sm font-semibold text-green-700 hover:bg-white">Fechar</button>
-        </div> : <form onSubmit={handleSubmit} noValidate className="mt-7 space-y-5">
+        </div> : <form onSubmit={handleSubmit(submitReport)} noValidate className="mt-7 space-y-5">
           <label className="block text-sm font-semibold text-ink">Motivo
-            <select value={reason} onChange={(event) => handleReasonChange(event.target.value)} disabled={isSubmitting} className="mt-2 w-full rounded-xl border border-ink/10 bg-mist px-4 py-3 text-ink focus:border-primary focus:outline-none disabled:cursor-not-allowed disabled:opacity-60">
+            <select {...register('reason', { onChange: () => setError('') })} disabled={isSubmitting} aria-invalid={errors.reason ? 'true' : undefined} aria-describedby={errors.reason ? 'report-reason-error' : undefined} className="mt-2 w-full rounded-xl border border-ink/10 bg-mist px-4 py-3 text-ink focus:border-primary focus:outline-none disabled:cursor-not-allowed disabled:opacity-60">
               <option value="" disabled>Selecione um motivo</option>
               {REPORT_REASONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
             </select>
+            {errors.reason && <span id="report-reason-error" role="alert" className="mt-2 block text-sm font-normal text-red-700">{errors.reason.message}</span>}
           </label>
           <label className="block text-sm font-semibold text-ink">Detalhes {reason !== 'other' && <span className="font-normal text-ink/50">(opcional)</span>}
-            <textarea value={details} onChange={(event) => { setDetails(event.target.value); setError(''); }} disabled={isSubmitting} required={reason === 'other'} minLength={reason === 'other' ? 5 : undefined} maxLength={1000} rows={5} placeholder={reason === 'other' ? 'Explique o motivo da denúncia.' : 'Inclua contexto adicional, se achar necessário.'} className="mt-2 w-full resize-y rounded-xl border border-ink/10 bg-mist px-4 py-3 text-ink placeholder:text-ink/35 focus:border-primary focus:outline-none disabled:cursor-not-allowed disabled:opacity-60" />
+            <textarea {...register('details', { onChange: () => setError('') })} disabled={isSubmitting} aria-invalid={errors.details ? 'true' : undefined} aria-describedby={errors.details ? 'report-details-error' : undefined} required={reason === 'other'} minLength={reason === 'other' ? 5 : undefined} maxLength={1000} rows={5} placeholder={reason === 'other' ? 'Explique o motivo da denúncia.' : 'Inclua contexto adicional, se achar necessário.'} className="mt-2 w-full resize-y rounded-xl border border-ink/10 bg-mist px-4 py-3 text-ink placeholder:text-ink/35 focus:border-primary focus:outline-none disabled:cursor-not-allowed disabled:opacity-60" />
             <span className="mt-2 block text-right text-xs font-normal text-ink/45">{details.length}/1000</span>
+            {errors.details && <span id="report-details-error" role="alert" className="mt-2 block text-sm font-normal text-red-700">{errors.details.message}</span>}
           </label>
           {error && <p role="alert" className="rounded-xl bg-red-50 px-4 py-3 text-sm text-red-700">{error}</p>}
           <div className="flex flex-wrap justify-end gap-3">

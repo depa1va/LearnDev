@@ -11,6 +11,7 @@ import { useAuth } from '../../providers/AuthProvider';
 import { getAvatarInitials } from '../../services/profileService';
 import { getUnreadNotificationCount, NOTIFICATIONS_UPDATED_EVENT } from '../../services/notificationService';
 import type { UserAccount } from '../../types/user';
+import styles from './Navbar.module.css';
 
 interface ProfileLinkProps {
   account: UserAccount | null;
@@ -104,8 +105,8 @@ export default function Navbar(): ReactElement {
       initial={{ y: -30, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
       transition={{ duration: 0.5 }}
-      className={`fixed top-0 inset-x-0 z-50 transition-all duration-300 ${
-        scrolled ? 'bg-white/80 backdrop-blur-md shadow-soft py-3' : 'bg-transparent py-5'
+      className={`${styles.header} fixed top-0 inset-x-0 z-50 ${
+        scrolled ? `${styles.scrolled} py-3` : `${styles.transparent} py-5`
       }`}
     >
       <nav className="max-w-7xl mx-auto px-6 flex items-center justify-between">
@@ -143,7 +144,7 @@ export default function Navbar(): ReactElement {
             animate={{ height: 'auto', opacity: 1 }}
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.3 }}
-            className="lg:hidden overflow-hidden bg-white border-t border-ink/5 mt-3"
+            className={`${styles.mobileMenu} lg:hidden overflow-hidden border-t mt-3`}
           >
             <div className="px-6 py-6 flex flex-col gap-4">
               {navLinks.map((link) => (

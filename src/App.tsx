@@ -23,6 +23,7 @@ import SignInPage from './pages/auth/SignInPage';
 import SignUpPage from './pages/auth/SignUpPage';
 import VerifyEmailPage from './pages/auth/VerifyEmailPage';
 import HomePage from './pages/HomePage';
+import AboutPage from './pages/AboutPage';
 import TermsPage from './pages/legal/TermsPage';
 import PrivacyPage from './pages/legal/PrivacyPage';
 import NotFoundPage from './pages/NotFoundPage';
@@ -41,6 +42,7 @@ export default function App(): React.JSX.Element {
       <Routes>
         <Route element={<PublicLayout />}>
           <Route index element={<HomePage />} />
+          <Route path="sobre" element={<AboutPage />} />
           <Route path="termos" element={<TermsPage />} />
           <Route path="privacidade" element={<PrivacyPage />} />
           <Route path="trilhas" element={<TracksPage />} />

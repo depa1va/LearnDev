@@ -128,6 +128,12 @@ export default function LessonPage() {
   const course = lessonViewData?.course ?? null;
   const backTo = course?.slug ? `/cursos/${course.slug}` : '/trilhas';
   const video = getYouTubeVideo(lesson);
+  /**
+   * Integração externa: embed do YouTube em modo de privacidade (youtube-nocookie).
+   * O videoId vem do conteúdo educacional validado e rel=0 reduz sugestões de vídeos relacionados.
+   * Esta tela não usa a IFrame API nem recebe eventos do player; assistir ao vídeo não altera o progresso.
+   */
+  const youtubeEmbedUrl = video ? `https://www.youtube-nocookie.com/embed/${video.videoId}?rel=0` : null;
   const hasInteractiveSteps = (lesson?.steps?.length ?? 0) > 0;
   const checkpointActivities = lessonViewData?.activities.filter((activity) => lesson?.checkpointActivity === true && activity.status === 'published') ?? [];
 
@@ -157,7 +163,7 @@ export default function LessonPage() {
         <article className="mx-auto max-w-3xl space-y-6">
           {video && <GlassCard hover={false} className="p-5 sm:p-7">
             <div className="flex items-center gap-2"><PlayCircle aria-hidden="true" className="h-5 w-5 text-primary" /><h2 className="font-heading text-2xl font-bold text-ink">Vídeo complementar</h2></div>
-            <div className="mt-5 aspect-video overflow-hidden rounded-2xl bg-ink"><iframe className="h-full w-full" src={`https://www.youtube-nocookie.com/embed/${video.videoId}?rel=0`} title={video.title} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerPolicy="strict-origin-when-cross-origin" allowFullScreen /></div>
+            <div className="mt-5 aspect-video overflow-hidden rounded-2xl bg-ink"><iframe className="h-full w-full" src={youtubeEmbedUrl ?? ''} title={video.title} allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerPolicy="strict-origin-when-cross-origin" allowFullScreen /></div>
             <h3 className="mt-5 font-semibold text-ink">{video.title}</h3>
             {video.channelName && <p className="mt-1 text-sm text-ink/60">Canal: {video.channelName}</p>}
             {video.educationalRole && <p className="mt-3 text-sm leading-relaxed text-ink/65">{video.educationalRole} O conteúdo escrito desta aula continua sendo a referência principal.</p>}

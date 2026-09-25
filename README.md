@@ -1,232 +1,207 @@
 # LearnDev
 
-Plataforma educacional para iniciantes em programação, com foco em clareza, prática guiada, acompanhamento individual e revisão. O projeto não utiliza mecanismos competitivos.
+Plataforma educacional para aprender programação com conteúdo estruturado, prática guiada, acompanhamento individual e uma comunidade de apoio.
 
-## Estado atual — Fase 9.2
+## Sobre o projeto
 
-Esta fase entrega a base real de Firebase e autenticação:
+O LearnDev é voltado principalmente para pessoas com pouco ou nenhum conhecimento em programação. A plataforma organiza a jornada de aprendizado desde os conceitos fundamentais até conteúdos mais avançados por meio de trilhas, cursos, módulos, aulas, vídeos complementares, atividades, exercícios práticos e acompanhamento de progresso.
 
-- Firebase Authentication por e-mail e senha, com persistência local de sessão;
-- cadastro com nome, username, e-mail, senha e confirmação;
-- verificação obrigatória de e-mail, reenvio e atualização do estado da conta;
-- login, logout e recuperação de senha;
-- documentos privados em `users/{uid}`, perfis públicos em `profiles/{usernameNormalized}` e reserva de usernames;
-- regras iniciais restritivas para Firestore e Storage;
-- preparação opcional para App Check e Firebase Emulator Suite;
-- onboarding curto, após a verificação de e-mail;
-- edição de nome e bio, com perfil público separado;
-- leitura de trilhas, cursos, módulos, aulas e conceitos publicados;
-- currículo estruturado com quatro cursos, 45 aulas planejadas e as dez primeiras aulas de lógica desenvolvidas e publicadas;
-- progresso individual de aula e curso, calculado apenas a partir de aulas concluídas;
-- atividades objetivas, histórico de tentativas e recomendações de revisão por conceito;
-- correção local de atividades objetivas, com feedback pedagógico por alternativa e sem dependência de Cloud Functions.
-- exercícios práticos de pseudocódigo (`complete_code`, `write_code` e `order_steps`), com tentativas privadas separadas e correção local determinística;
-- comunidade com publicações, respostas, edição, exclusão lógica, reação “Útil” e denúncias básicas;
-- área restrita de moderação para analisar denúncias abertas, descartar denúncias ou ocultar conteúdo por exclusão lógica.
+O projeto busca reduzir a dificuldade dos primeiros passos em desenvolvimento ao reunir explicações claras, prática orientada e recursos de interação entre estudantes em uma única experiência web.
 
-Ainda não há execução de código, correção de código em servidor, player de vídeo avançado ou o desenvolvimento completo das 45 aulas planejadas.
+## Funcionalidades
+
+- Cadastro, login, logout, recuperação de senha e verificação de e-mail.
+- Onboarding e configurações da conta.
+- Perfis públicos, busca de usuários, seguidores e notificações internas.
+- Trilhas, cursos, módulos, aulas e vídeos complementares.
+- Atividades objetivas com feedback pedagógico e exercícios práticos de pseudocódigo.
+- Progresso individual, histórico de tentativas e conceitos para revisão.
+- Comunidade com posts, respostas e reação de conteúdo útil.
+- Denúncias e área de moderação para contas autorizadas.
+- Avatar via Cloudinary, com upload assinado e remoção segura.
+- Dark mode, layout responsivo e página institucional em [/sobre](/sobre).
 
 ## Tecnologias
 
-- React 18 + Vite
-- React Router
-- Firebase SDK (Authentication, Cloud Firestore, Storage e App Check preparado)
-- Tailwind CSS, Framer Motion e Lucide React
+As versões abaixo refletem o `package.json` do projeto.
 
-## Configuração do Firebase
+- React 18.3.1 e React DOM 18.3.1
+- Vite 5.3.1
+- TypeScript 5.7.2
+- React Router DOM 6.28.1
+- Tailwind CSS 3.4.4, CSS global, variáveis CSS e CSS Modules
+- React Hook Form 7.88.0 e Zod 4.6.5
+- Firebase Web SDK 12.18.0: Authentication, Cloud Firestore e App Check
+- Firebase Admin 13.8.0 nos scripts administrativos e endpoints server-side
+- Cloudinary para avatares
+- Resend para e-mails de verificação
+- Vercel para os endpoints server-side e hospedagem
+- Framer Motion 11.2.10 e Lucide React 0.383.0
+- YouTube Privacy-Enhanced Mode (`youtube-nocookie`) para embeds complementares
 
-1. Crie ou selecione um projeto no [console do Firebase](https://console.firebase.google.com/).
-2. Adicione um aplicativo Web ao projeto e copie a configuração exibida para ele.
-3. Copie `.env.example` para `.env.local`.
-4. Preencha **somente** estas variáveis com os valores do aplicativo Web:
+## Back-end
 
-```env
-VITE_FIREBASE_API_KEY=
-VITE_FIREBASE_AUTH_DOMAIN=
-VITE_FIREBASE_PROJECT_ID=
-VITE_FIREBASE_STORAGE_BUCKET=
-VITE_FIREBASE_MESSAGING_SENDER_ID=
-VITE_FIREBASE_APP_ID=
-```
+O LearnDev Web utiliza Firebase Authentication e Cloud Firestore como base de autenticação e dados. O projeto Firebase é a fonte compartilhada prevista para os clientes Web e Mobile do LearnDev; a validação do repositório Mobile não faz parte deste repositório.
 
-Esses valores identificam o aplicativo Web e não são service accounts. Nunca coloque chaves administrativas ou arquivos de credencial no frontend.
+- **Firebase Authentication:** cadastro e sessão por e-mail e senha, com verificação de e-mail.
+- **Cloud Firestore:** conteúdo educacional, perfis, progresso, comunidade, moderação e relações sociais.
+- **Firestore Rules:** autorização por autenticação, e-mail verificado, ownership, papel e estrutura de documento.
+- **App Check:** inicializado no cliente quando a site key pública do reCAPTCHA v3 é configurada.
+- **Vercel APIs:** endpoints autenticados para verificação de e-mail, assinatura e remoção de avatar, além do processamento de notificações sociais.
+- **Firebase Admin:** usado apenas no servidor e nos scripts administrativos; nunca é enviado ao navegador.
+- **Resend:** envio server-side de e-mails de verificação.
+- **Cloudinary:** upload direto assinado de avatares; o segredo de API permanece no servidor.
 
-No console, também é necessário:
+Os contratos das APIs próprias e integrações externas estão documentados em comentários próximos aos services, componentes e endpoints envolvidos.
 
-- em **Authentication → Sign-in method**, ativar **E-mail/Senha**;
-- criar o banco em **Firestore Database**;
-- ativar **Storage**;
-- em **Authentication → Settings → Authorized domains**, adicionar os domínios usados em desenvolvimento e produção, se necessário;
-- antes de produção, ativar **App Check** para Web com reCAPTCHA v3 e acrescentar a chave pública em `VITE_FIREBASE_APP_CHECK_RECAPTCHA_SITE_KEY`.
+### Modelo de dados resumido
 
-## Regras
+| Área | Collections e subcollections principais |
+| --- | --- |
+| Conteúdo educacional | `tracks`, `courses`, `modules`, `lessons`, `activities`, `concepts`, `practicalExercises`, `courseCatalogs` |
+| Contas e perfis | `users`, `profiles`, `usernames` |
+| Progresso privado | `users/{uid}/lessonProgress`, `activityAttempts`, `practicalAttempts`, `conceptMastery` |
+| Notificações | `users/{uid}/notifications` |
+| Comunidade | `posts`, `posts/{postId}/replies`, `helpful` de posts e respostas, `reports` |
+| Relações sociais | `follows` |
 
-As regras estão em `firestore.rules` e `storage.rules` e são referenciadas por `firebase.json`.
+O conteúdo educacional é inserido ou atualizado pelo seed administrativo. O frontend não cria nem edita esse conteúdo.
 
-Para publicá-las após instalar o Firebase CLI e associar o projeto:
+### Firebase Storage
 
-```bash
-npx firebase-tools login
-npx firebase-tools use --add
-npx firebase-tools deploy --only firestore:rules,storage
-```
+O Firebase Storage permanece inicializado e disponível no Emulator Suite por configuração legada, mas nenhuma funcionalidade atual do Web depende dele. Avatares usam Cloudinary, não Firebase Storage. As regras de Storage foram preservadas para decisão futura, sem remoção automática nesta etapa.
 
-No Firestore, tudo é negado por padrão fora de `users`, `profiles`, `usernames`, da comunidade e das coleções educacionais publicadas. O campo `role` não pode ser alterado pelo cliente. No Storage, somente o proprietário autenticado pode gravar ou remover imagens em `avatars/{uid}/...`; avatares são legíveis publicamente por pertencerem a perfis públicos.
+## Segurança
 
-## Username
+- Rotas e operações educacionais, sociais e de progresso exigem uma conta autenticada com e-mail verificado quando aplicável.
+- Firestore Rules restringem ownership e dados privados; progresso, tentativas e notificações pertencem somente ao respectivo usuário.
+- Perfis públicos não expõem e-mail, consentimentos, tentativas ou progresso privado.
+- Endpoints da Vercel validam o Firebase ID Token e derivam a identidade do ator a partir dele, sem confiar em UIDs enviados pelo navegador.
+- Variáveis administrativas são lidas apenas no servidor. Firebase Admin, private keys, API secrets do Resend e do Cloudinary não são incluídos no bundle cliente.
+- Avatares usam parâmetros Cloudinary assinados no servidor e URLs validadas antes de serem persistidas.
+- App Check é inicializado quando configurado. O enforcement deve ser confirmado no Firebase Console para cada ambiente.
 
-O username é normalizado para minúsculas e precisa ter de 3 a 20 caracteres, usando somente letras, números e underscore. O cadastro cria, em uma única transação do Firestore:
+## Variáveis de ambiente
 
-- `usernames/{usernameNormalized}` com o UID reservado;
-- `users/{uid}` com dados privados permitidos;
-- `profiles/{usernameNormalized}` com dados públicos, sem e-mail.
+Copie [`.env.example`](.env.example) para `.env.local` e preencha os valores do ambiente adequado. Nunca versione `.env.local` ou credenciais administrativas.
 
-Uma transação do Firestore verifica e reserva o documento de username junto com os perfis, impedindo que dois cadastros confirmem o mesmo username. Como Firebase Authentication e Firestore são serviços distintos, a criação da conta não pode fazer parte dessa mesma transação: em falhas conhecidas de provisionamento, a conta recém-criada é removida; uma falha ambígua de rede pode exigir recuperação ou suporte.
+### Frontend público
 
-## Emulator Suite
+As variáveis `VITE_` são disponibilizadas pelo Vite no navegador e devem conter apenas configuração pública:
 
-O arquivo `firebase.json` prepara Authentication, Firestore, Storage e a interface dos emuladores. Após instalar Java e Firebase CLI, execute:
+- `VITE_FIREBASE_API_KEY`
+- `VITE_FIREBASE_AUTH_DOMAIN`
+- `VITE_FIREBASE_PROJECT_ID`
+- `VITE_FIREBASE_STORAGE_BUCKET`
+- `VITE_FIREBASE_MESSAGING_SENDER_ID`
+- `VITE_FIREBASE_APP_ID`
+- `VITE_FIREBASE_APP_CHECK_RECAPTCHA_SITE_KEY` (opcional)
+- `VITE_USE_FIREBASE_EMULATORS` e `VITE_FIREBASE_EMULATOR_HOST` (desenvolvimento local)
 
-```bash
-npx firebase-tools emulators:start --project SEU_PROJECT_ID
-```
+### Backend server-side
 
-Mantenha as variáveis do aplicativo Web em `.env.local` e acrescente:
+Estas variáveis são usadas somente pelos endpoints Vercel ou scripts administrativos. Não use o prefixo `VITE_` para elas:
 
-```env
-VITE_USE_FIREBASE_EMULATORS=true
-VITE_FIREBASE_EMULATOR_HOST=127.0.0.1
-```
+- Firebase Admin: `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY`
+- Resend: `RESEND_API_KEY`
+- Cloudinary: `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`
 
-## Perfil e onboarding
+## Instalação e execução local
 
-Os dados privados ficam em `users/{uid}`. Além dos campos de conta já existentes, o documento possui `onboardingCompleted`, `experienceLevel` e `learningGoal`. Não há e-mail em nenhuma coleção pública.
-
-Os dados públicos ficam em `profiles/{usernameNormalized}` e contêm somente UID, nome, username, foto e bio. A tela de configurações atualiza nome e bio em `users` e `profiles` em uma única gravação em lote; as regras exigem que os campos públicos compartilhados permaneçam iguais nos dois documentos.
-
-Depois de verificar o e-mail, estudantes cujo onboarding não foi concluído são encaminhados a `/onboarding`. São três passos: boas-vindas, experiência anterior e objetivo de estudo. Ao concluir, somente as opções escolhidas e `onboardingCompleted: true` são salvos.
-
-O envio de avatar não foi ativado nesta fase. `photoURL` permanece preparado e o sistema apresenta iniciais enquanto o upload seguro não for concluído em uma etapa posterior.
-
-## Fundação educacional e atividades
-
-As coleções de conteúdo são `tracks`, `courses`, `modules`, `lessons`, `activities`, `practicalExercises` e `concepts`. O cliente nunca pode criar, editar ou excluir conteúdo. Aulas, atividades, exercícios práticos e conceitos publicados exigem autenticação, pois podem conter material pedagógico integral, steps interativos ou respostas usadas pela correção local.
-
-### Catálogo público
-
-As rotas `/trilhas`, `/trilhas/:slug` e `/cursos/:slug` são públicas e apresentam a organização curricular. Para não expor conteúdo interno de aula, o seed também gera `courseCatalogs/{courseId}`. Cada documento dessa coleção contém somente a ementa pública: módulos e metadados das aulas publicadas (ID, título, descrição, ordem e duração estimada). Não inclui `sections`, `steps`, atividades, exercícios, conceitos ou respostas.
-
-Depois de revisar esta alteração localmente, execute `npm run seed:education` para criar ou atualizar as ementas públicas junto ao restante do conteúdo e publique as Firestore Rules revisadas. O seed não é executado pelo site.
-
-Cada questão pública da atividade contém enunciado, alternativas, `correctAnswer`, explicações, dica e `conceptIds`. A correção é executada localmente por `src/services/activityService.ts`, que também grava a tentativa em `users/{uid}/activityAttempts/{attemptId}` e atualiza `users/{uid}/conceptMastery/{conceptId}` em uma transação do Firestore.
-
-Esta escolha mantém o projeto no plano gratuito, mas possui uma limitação importante: uma pessoa tecnicamente avançada consegue inspecionar ou manipular respostas, contagens e resultados no navegador. Por isso, as tentativas são histórico educacional pessoal; não são resultados oficiais, certificados ou base para competição.
-
-As Rules protegem a propriedade dos dados, a estrutura dos documentos, referências a atividades e conteúdos publicados e timestamps. Elas não podem provar que o resultado calculado pelo cliente está correto sem um backend confiável.
-
-### Exercícios práticos de pseudocódigo
-
-Os exercícios práticos ficam em `practicalExercises` e são vinculados a uma aula publicada. Eles são uma modalidade separada das atividades objetivas: não substituem questionários, não atualizam `conceptMastery` e registram tentativas em `users/{uid}/practicalAttempts/{attemptId}`.
-
-Cada exercício usa somente pseudocódigo e um corretor local simples e determinístico:
-
-- `complete_code`: compara a lacuna normalizada com respostas aceitas;
-- `order_steps`: verifica a ordem das etapas fornecidas;
-- `write_code`: verifica critérios declarados da solução, sem executar código.
-
-Essa escolha não depende de Cloud Functions, planos pagos, IA, execução arbitrária de código ou editor externo. Em contrapartida, uma pessoa tecnicamente avançada pode inspecionar ou manipular as regras de correção e o resultado no navegador. As tentativas são, portanto, histórico pedagógico pessoal — não resultados oficiais, certificados ou base para competição.
-
-## Comunidade e moderação
-
-Publicações e respostas ficam em `posts/{postId}` e `posts/{postId}/replies/{replyId}`. A exclusão é lógica: documentos não são apagados fisicamente. Quando o autor remove seu conteúdo, são gravados `deletedBy`, `deletionType: "author"` e `deletedAt`. Quando a moderação remove conteúdo, os mesmos campos registram `deletionType: "moderation"`.
-
-Denúncias ficam em `reports/{reportId}`. Estudantes podem criar e consultar somente as próprias denúncias; nunca podem listá-las. Moderadores e administradores podem listar denúncias abertas e registrar uma única decisão:
-
-- `open → resolved`, ao remover conteúdo ou registrar a resolução de conteúdo já indisponível;
-- `open → dismissed`, quando a denúncia não procede.
-
-As decisões registram `reviewedBy`, `reviewedAt` e, opcionalmente, `resolutionNote`. O conteúdo apagado continua acessível somente para moderadores e administradores dentro da área restrita `/moderacao`; estudantes continuam vendo apenas conteúdo publicado.
-
-### Papéis e primeiro administrador
-
-Os únicos papéis aceitos são `student`, `moderator` e `admin`. O cadastro público cria apenas `student`, e as Rules impedem que o usuário altere o próprio papel.
-
-Como esta versão não usa Cloud Functions nem credenciais administrativas no frontend, o primeiro administrador deve ser definido manualmente pelo responsável técnico, **após revisar e publicar as Rules**:
-
-1. No Firebase Console, abra **Firestore Database → Data → users**.
-2. Localize o documento cujo ID é o UID da conta responsável.
-3. Altere somente o campo `role` de `student` para `admin`.
-4. Salve a alteração e recarregue a sessão dessa conta no LearnDev.
-
-Essa operação deve ser limitada ao responsável pelo projeto ou realizada via Firebase Admin SDK em ambiente seguro. Não existe botão, e-mail pré-configurado ou código secreto no frontend para conceder acesso administrativo.
-
-Os serviços de leitura estão em `src/services/educationService.js`. Eles usam consultas simples, filtram conteúdo publicado e fazem a ordenação pelo campo `order` no cliente para evitar índices compostos desnecessários nesta fase.
-
-O seed de desenvolvimento contém uma trilha e quatro cursos estruturados. Somente **Fundamentos de Programação e Lógica** e suas dez primeiras aulas estão publicados. As demais 35 aulas aparecem como `draft`, são validadas pelo manifesto, mas não são retornadas pelas consultas do frontend.
-
-As aulas publicadas utilizam objetivos, seções textuais, exemplos de pseudocódigo, reflexão não persistente, erros comuns, resumo e próximos passos. Cada uma possui uma atividade objetiva associada; há 60 questões no conjunto inicial, vinculadas a conceitos específicos para a revisão individual.
-
-Ele não é executado pela aplicação nem fica disponível em qualquer tela pública.
-
-### Seed educacional administrativo
-
-Os documentos mínimos estão definidos em `scripts/educationSeedData.mjs`. O comando `npm run seed:education` é uma ferramenta Node de desenvolvimento/administração: não é executado automaticamente, não aparece no site e não usa as permissões do navegador.
-
-O script reutiliza esse manifesto, valida referências entre trilhas, cursos, módulos, aulas, atividades, exercícios práticos e conceitos antes de gravar e usa Firebase Admin SDK. Nenhuma chave administrativa é enviada ao frontend.
-
-#### Configurar para o Firestore real
-
-1. Execute `npm install` para instalar as dependências de desenvolvimento, incluindo `firebase-admin`.
-2. No Firebase Console, abra **Configurações do projeto → Contas de serviço → Gerar nova chave privada**.
-3. Salve o JSON em uma pasta segura fora do repositório. Nunca o copie para `src/`, `.env.local` ou qualquer arquivo versionado.
-4. No PowerShell, dentro da pasta do projeto, informe somente o caminho local da credencial e o ID do projeto:
+Pré-requisito: Node.js 18 ou superior.
 
 ```powershell
-$env:FIREBASE_PROJECT_ID="SEU_PROJECT_ID"
-$env:DEVQUEST_FIREBASE_SERVICE_ACCOUNT="C:\caminho-seguro\service-account.json"
-npm run seed:education
-Remove-Item Env:\DEVQUEST_FIREBASE_SERVICE_ACCOUNT
-```
-
-Como alternativa para ambientes que usam Application Default Credentials, execute `gcloud auth application-default login`, defina `FIREBASE_PROJECT_ID` e rode o mesmo comando sem `DEVQUEST_FIREBASE_SERVICE_ACCOUNT`.
-
-#### Configurar para o Emulator Suite
-
-Com o Emulator Suite em execução, use:
-
-```powershell
-$env:FIREBASE_PROJECT_ID="devquest-local"
-$env:FIRESTORE_EMULATOR_HOST="127.0.0.1:8080"
-npm run seed:education
-```
-
-O seed modifica somente `tracks`, `courses`, `modules`, `lessons`, `concepts`, `activities` e `practicalExercises`. Os IDs vêm das chaves do manifesto. Ao encontrar um documento existente com o mesmo ID, ele completa/atualiza os campos do manifesto, preserva `createdAt` quando já existe e sempre atualiza `updatedAt`. Nenhum documento fora do manifesto é apagado.
-
-Nunca afrouxe as regras do Firestore para popular conteúdo educacional. O Firebase Admin SDK executa fora das regras do cliente e deve permanecer restrito ao ambiente do desenvolvedor.
-
-Após alterar `firestore.rules`, publique as regras antes de usar a leitura educacional em produção:
-
-```bash
-npx firebase-tools deploy --only firestore:rules,storage
-```
-
-Não há índice composto configurado nesta fase. Caso uma consulta futura exija um, o console do Firestore fornecerá a definição e o link de criação.
-
-## Limitações atuais
-
-- Não há upload de avatar, player de vídeo avançado, execução de código, correção de código no servidor, banimentos, strikes, notificações ou painel administrativo de usuários.
-- As 35 aulas em `draft` ainda precisam de conteúdo pedagógico completo, atividades e revisão editorial antes de serem publicadas.
-- A correção atual atende questões `multiple-choice`, `true-false` e exercícios de pseudocódigo com critérios locais. Revisão mais detalhada, execução segura e correção robusta de respostas abertas pertencem às próximas fases.
-
-## Executando
-
-```bash
+git clone https://github.com/depa1va/LearnDev.git
+cd LearnDev
+Copy-Item .env.example .env.local
 npm install
 npm run dev
 ```
 
-Para gerar a build de produção:
+Preencha `.env.local` com a configuração pública do Firebase antes de utilizar recursos que dependem do backend.
 
-```bash
+### Build de produção
+
+```powershell
 npm run build
+npm run preview
 ```
+
+### Seed educacional administrativo
+
+O seed não é executado pelo site. Após configurar as credenciais administrativas de forma segura no ambiente local, ele pode ser executado manualmente:
+
+```powershell
+npm run seed:education
+```
+
+## Estrutura do projeto
+
+```text
+src/
+  assets/        # imagens e recursos locais
+  components/    # componentes reutilizáveis, layouts e seções
+  config/        # configurações da aplicação
+  data/          # dados institucionais e conteúdo estático
+  lib/           # inicialização dos serviços Firebase
+  pages/         # telas públicas, autenticadas, legais e de autenticação
+  providers/     # contexto de autenticação e tema
+  routes/        # guards de rota
+  schemas/       # schemas Zod de formulários
+  services/      # acesso a Firebase e integrações client-side
+  types/         # tipos TypeScript das entidades
+  utils/         # utilitários compartilhados
+api/
+  auth/          # endpoint de verificação de e-mail
+  notifications/ # processamento server-side de notificações
+  profile/       # assinatura e remoção de avatar
+  _lib/          # Firebase Admin e helpers server-side
+public/          # arquivos públicos, sitemap e robots
+scripts/         # seed e validação do conteúdo educacional
+```
+
+## Rotas principais
+
+### Públicas
+
+- `/`
+- `/sobre`
+- `/termos`
+- `/privacidade`
+- `/trilhas`
+- `/trilhas/:slug`
+- `/cursos/:slug`
+- `/entrar`
+- `/cadastro`
+- `/recuperar-senha`
+- `/verificar-email`
+
+### Protegidas
+
+As rotas abaixo exigem autenticação, e as áreas do estudante também exigem e-mail verificado e onboarding concluído conforme os guards da aplicação.
+
+- `/dashboard`
+- `/progresso`
+- `/notificacoes`
+- `/aulas/:lessonId`
+- `/atividades/:activityId`
+- `/praticas/:exerciseId`
+- `/comunidade`
+- `/comunidade/posts/:postId`
+- `/usuarios`
+- `/perfil/:username`
+- `/configuracoes`
+- `/moderacao` (somente moderador ou administrador)
+
+## Página Sobre
+
+A rota [/sobre](/sobre) apresenta a descrição institucional do LearnDev, seus objetivos, funcionalidades principais e a equipe responsável pelo desenvolvimento.
+
+## Equipe
+
+- **André Monteiro Paiva** — Desenvolvedor web e mobile da plataforma.
+- **Guilherme Marques dos Santos** — Desenvolvedor web e mobile da plataforma.
+
+## Status do projeto
+
+Versão desenvolvida para o Trabalho de Conclusão de Curso. A evolução de currículo, integrações e entrega final deve ser acompanhada pela revisão das regras, variáveis de ambiente e documentação correspondente.

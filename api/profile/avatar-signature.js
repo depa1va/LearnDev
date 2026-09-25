@@ -27,10 +27,12 @@ function signCloudinaryParameters(parameters, apiSecret) {
 /**
  * POST /api/profile/avatar-signature
  *
- * Autenticação: Firebase ID Token em Authorization: Bearer. O token é verificado e o UID
- * vem exclusivamente dele. A rota devolve parâmetros temporários para um upload direto ao
- * Cloudinary; CLOUDINARY_API_SECRET nunca sai deste servidor. Erros possíveis: 401 para
- * sessão inválida, 403 para e-mail não verificado/conta desabilitada e 429 para cooldown.
+ * Objetivo: gerar a assinatura temporária de upload para o avatar determinístico da conta.
+ * Autenticação: Firebase ID Token em Authorization: Bearer; não há corpo e o UID vem apenas do token.
+ * Retorno: timestamp, signature, cloudName, apiKey, publicId, transformation, allowedFormats,
+ * overwrite e invalidate. Os parâmetros correspondem ao upload direto ao Cloudinary.
+ * Erros possíveis: 401 para sessão inválida, 403 para e-mail não verificado/conta desabilitada,
+ * 429 para cooldown e 500 para configuração indisponível. CLOUDINARY_API_SECRET nunca sai do servidor.
  */
 export default async function handler(request, response) {
   response.setHeader('Cache-Control', 'no-store');

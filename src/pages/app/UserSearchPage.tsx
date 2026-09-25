@@ -1,12 +1,14 @@
 import { Search, UserRound } from 'lucide-react';
-import { useEffect, useState, type FormEvent, type ReactElement } from 'react';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { useEffect, useState, type ReactElement } from 'react';
+import { useForm } from 'react-hook-form';
 import { Link, useSearchParams } from 'react-router-dom';
 import Avatar from '../../components/ui/Avatar';
 import EmptyState from '../../components/ui/EmptyState';
 import GlassCard from '../../components/ui/GlassCard';
 import { PageFrame, PageIntro } from '../../components/ui/PageFrame';
-import { normalizeUsername } from '../../services/authService';
-import { getAvatarInitials, isUsernameSearchPrefix, searchPublicProfiles } from '../../services/profileService';
+import { usernameSearchSchema, type UsernameSearchFormValues } from '../../schemas/profile';
+import { getAvatarInitials, searchPublicProfiles } from '../../services/profileService';
 import { formatStudyDate } from '../../utils/date';
 import type { PublicUserProfile } from '../../types/user';
 
@@ -37,12 +39,20 @@ function UserSearchResult({ profile }: { profile: PublicUserProfile }): ReactEle
 export default function UserSearchPage(): ReactElement {
   const [searchParams, setSearchParams] = useSearchParams();
   const query = searchParams.get('q') ?? '';
-  const [input, setInput] = useState(query);
   const [state, setState] = useState<UserSearchState>(initialSearchState);
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors },
+  } = useForm<UsernameSearchFormValues>({
+    resolver: zodResolver(usernameSearchSchema),
+    defaultValues: { query },
+  });
 
   useEffect(() => {
-    setInput(query);
-  }, [query]);
+    reset({ query });
+  }, [query, reset]);
 
   useEffect(() => {
     let active = true;
@@ -67,21 +77,16 @@ export default function UserSearchPage(): ReactElement {
     };
   }, [query]);
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>): void {
-    event.preventDefault();
-    const normalizedQuery = normalizeUsername(input);
-
+  function submitSearch({ query: normalizedQuery }: UsernameSearchFormValues): void {
     if (!normalizedQuery) {
       setSearchParams({});
       return;
     }
-
-    if (!isUsernameSearchPrefix(normalizedQuery)) {
-      setState({ loading: false, error: 'Use de 1 a 20 caracteres: letras, números ou underscore.', results: [] });
-      return;
-    }
-
     setSearchParams({ q: normalizedQuery });
+  }
+
+  function handleInvalidSearch(): void {
+    setState(initialSearchState());
   }
 
   return (
@@ -89,14 +94,15 @@ export default function UserSearchPage(): ReactElement {
       <PageIntro eyebrow="Pessoas" title="Encontre estudantes" description="Pesquise pelo username para conhecer quem participa da comunidade." />
       <div className="max-w-3xl">
         <GlassCard hover={false} className="p-6 sm:p-8">
-          <form onSubmit={handleSubmit} className="flex flex-col gap-3 sm:flex-row">
+          <form onSubmit={handleSubmit(submitSearch, handleInvalidSearch)} noValidate className="flex flex-col gap-3 sm:flex-row">
             <label className="sr-only" htmlFor="username-search">Buscar por username</label>
             <div className="relative flex-1">
               <Search aria-hidden="true" className="pointer-events-none absolute left-4 top-1/2 h-5 w-5 -translate-y-1/2 text-ink/45" />
-              <input id="username-search" value={input} onChange={(event) => setInput(event.target.value)} maxLength={20} autoComplete="off" placeholder="Ex.: andre_dev" className="h-12 w-full rounded-xl border border-ink/10 bg-mist pl-12 pr-4 text-ink placeholder:text-ink/35 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15" />
+              <input id="username-search" {...register('query')} maxLength={20} autoComplete="off" aria-invalid={errors.query ? 'true' : undefined} aria-describedby={errors.query ? 'username-search-error' : undefined} placeholder="Ex.: andre_dev" className="h-12 w-full rounded-xl border border-ink/10 bg-mist pl-12 pr-4 text-ink placeholder:text-ink/35 focus:border-primary focus:outline-none focus:ring-2 focus:ring-primary/15" />
             </div>
             <button type="submit" className="inline-flex h-12 items-center justify-center gap-2 rounded-xl bg-primary px-5 text-sm font-semibold text-white shadow-soft transition-colors hover:bg-primary-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"><Search aria-hidden="true" className="h-4 w-4" />Buscar</button>
           </form>
+          {errors.query && <p id="username-search-error" role="alert" className="mt-3 text-sm text-red-700">{errors.query.message}</p>}
           <p className="mt-3 text-xs leading-relaxed text-ink/50">A pesquisa encontra usernames que começam com o termo informado.</p>
         </GlassCard>
 

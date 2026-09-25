@@ -2,6 +2,7 @@ import { motion } from 'framer-motion';
 import SectionTag from '../ui/SectionTag';
 import RobotMascot from '../illustrations/RobotMascot';
 import { fadeUp, staggerContainer, viewportOnce } from '../../utils/motion';
+import { teamMembers } from '../../data/about';
 import type { ReactElement } from 'react';
 
 export default function StatsAbout(): ReactElement {
@@ -34,6 +35,32 @@ export default function StatsAbout(): ReactElement {
           <RobotMascot className="w-56 h-56 sm:w-64 sm:h-64" />
         </motion.div>
       </div>
+
+      <motion.div
+        initial="hidden"
+        whileInView="show"
+        viewport={viewportOnce}
+        variants={staggerContainer(0.12)}
+        className="max-w-4xl mx-auto mt-16 grid gap-5 sm:grid-cols-2"
+      >
+        {teamMembers.map((member) => (
+          <motion.article
+            key={member.name}
+            variants={fadeUp}
+            className="flex items-center gap-4 rounded-2xl border border-white/10 bg-white/5 p-5"
+          >
+            <img
+              src={member.photo}
+              alt={member.name}
+              className="h-20 w-20 shrink-0 rounded-full border border-white/15 object-cover object-center"
+            />
+            <div>
+              <h3 className="font-heading text-lg font-semibold text-white">{member.name}</h3>
+              <p className="mt-1 text-sm leading-relaxed text-white/60">{member.role}</p>
+            </div>
+          </motion.article>
+        ))}
+      </motion.div>
     </section>
   );
 }

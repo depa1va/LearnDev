@@ -1,6 +1,7 @@
 import { Code2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import type { MouseEventHandler, ReactElement } from 'react';
+import styles from './Brand.module.css';
 
 interface BrandProps {
   light?: boolean;
@@ -10,12 +11,12 @@ interface BrandProps {
 
 export default function Brand({ light = false, onClick, className = '' }: BrandProps): ReactElement {
   return (
-    <Link to="/" onClick={onClick} className={`flex items-center gap-2 ${className}`} aria-label="LearnDev — página inicial">
-      <span className="w-9 h-9 rounded-xl bg-primary flex items-center justify-center text-white shadow-soft">
+    <Link to="/" onClick={onClick} className={`${styles.brand} ${className}`} aria-label="LearnDev — página inicial">
+      <span className={styles.mark}>
         <Code2 className="w-5 h-5" />
       </span>
-      <span className={`font-heading font-bold text-lg ${light ? 'text-white' : 'text-ink'}`}>
-        Learn<span className={light ? 'text-primary-100' : 'text-primary'}>Dev</span>
+      <span className={`${styles.wordmark} ${light ? styles.lightWordmark : ''}`}>
+        Learn<span className={styles.accent}>Dev</span>
       </span>
     </Link>
   );

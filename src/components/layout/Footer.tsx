@@ -12,6 +12,7 @@ const platformLinks: readonly PlatformLink[] = [
   { label: 'Trilhas', to: '/trilhas' },
   { label: 'Comunidade', to: '/comunidade' },
   { label: 'Como funciona', to: '/#como-funciona' },
+  { label: 'Sobre', to: '/sobre' },
 ];
 
 export default function Footer(): ReactElement {

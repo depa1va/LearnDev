@@ -1,5 +1,11 @@
 import { getApp, getApps, initializeApp, type FirebaseApp, type FirebaseOptions } from 'firebase/app';
 
+/**
+ * Integração Firebase Web SDK: inicializa a aplicação cliente com variáveis VITE_ públicas.
+ * Esses identificadores permitem conectar Auth, Firestore e Storage ao projeto, mas não concedem
+ * privilégios administrativos. Credenciais do Firebase Admin permanecem exclusivamente em api/.
+ */
+
 type RequiredFirebaseEnvironmentVariable =
   | 'VITE_FIREBASE_API_KEY'
   | 'VITE_FIREBASE_AUTH_DOMAIN'

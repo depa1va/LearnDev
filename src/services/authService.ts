@@ -11,6 +11,7 @@ import {
 import { FirebaseError } from 'firebase/app';
 import {
   doc,
+  getDoc,
   runTransaction,
   serverTimestamp,
   updateDoc,
@@ -72,6 +73,19 @@ export function validateUsername(value: string): string | null {
   return null;
 }
 
+/**
+ * Consulta pontualmente a reserva pública de username para orientar o cadastro.
+ * A transação de registerUser continua sendo a proteção definitiva contra concorrência.
+ */
+export async function checkUsernameAvailability(username: string): Promise<boolean> {
+  const normalizedUsername = normalizeUsername(username);
+  if (validateUsername(normalizedUsername)) return false;
+  if (!db) throw new Error('A configuração do Firebase ainda não está disponível.');
+
+  const usernameSnapshot = await getDoc(doc(db, 'usernames', normalizedUsername));
+  return !usernameSnapshot.exists();
+}
+
 function requireFirebaseServices(): FirebaseServices {
   if (!auth || !db) throw new Error('A configuração do Firebase ainda não está disponível.');
   return { authentication: auth, firestore: db };
@@ -106,6 +120,14 @@ async function getResponsePayload(response: Response): Promise<VerificationRespo
   }
 }
 
+/**
+ * API: POST /api/auth/send-verification
+ *
+ * Objetivo: solicitar o e-mail transacional de verificação sem expor a chave do Resend.
+ * Autenticação: Firebase ID Token da sessão no header Authorization; não há corpo de requisição.
+ * Funcionamento: o servidor valida o token e define o destinatário a partir da conta autenticada.
+ * Retorno: { sent: true } em caso de sucesso; erros possuem code e message seguros para a interface.
+ */
 async function sendCustomVerificationEmail(user: User | null = auth?.currentUser ?? null): Promise<VerificationResponsePayload> {
   if (!user) {
     throw new VerificationError('verification/unauthenticated', 'Sua sessão expirou. Entre novamente para continuar.');

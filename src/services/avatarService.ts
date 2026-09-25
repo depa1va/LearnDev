@@ -133,6 +133,15 @@ function matchesSignedCloudinaryAvatarUrl(urlValue: string, signature: AvatarSig
     && isLearnDevCloudinaryAvatarUrl(urlValue, uid);
 }
 
+/**
+ * API: POST /api/profile/avatar-signature
+ *
+ * Objetivo: obter parâmetros temporários para o upload assinado de um avatar no Cloudinary.
+ * Autenticação: Firebase ID Token da sessão no header Authorization; a chamada não envia corpo.
+ * Retorno: timestamp, signature, cloudName, apiKey, publicId, transformation, allowedFormats,
+ * overwrite e invalidate. A assinatura é calculada apenas no servidor e nunca contém a API secret.
+ * Erros relevantes: sessão inválida, e-mail não verificado, cooldown ou indisponibilidade do servidor.
+ */
 async function getAvatarSignature(): Promise<AvatarSignaturePayload> {
   const currentUser = auth?.currentUser;
   if (!currentUser) throw new Error('Entre novamente para alterar sua foto de perfil.');
@@ -163,8 +172,13 @@ export function validateAvatarFile(file: File | null): AvatarFileValidation {
 }
 
 /**
- * Obtém parâmetros assinados da API autenticada e envia o arquivo diretamente ao Cloudinary.
- * A API secret permanece no servidor; o Firestore recebe apenas a URL HTTPS retornada pelo Cloudinary.
+ * API externa: POST https://api.cloudinary.com/v1_1/{cloudName}/image/upload
+ *
+ * Objetivo: enviar diretamente ao Cloudinary um arquivo já validado no navegador.
+ * Funcionamento: usa os parâmetros assinados fornecidos por /api/profile/avatar-signature em FormData:
+ * file, api_key, timestamp, signature, public_id, overwrite, invalidate, transformation e allowed_formats.
+ * Retorno usado: secure_url e public_id. Ambos são validados antes de a secure_url ser devolvida para
+ * persistência no perfil. CLOUDINARY_API_SECRET não é enviado nem disponibilizado ao navegador.
  */
 export async function uploadAvatar(file: File): Promise<AvatarUploadResult> {
   const validation = validateAvatarFile(file);
@@ -198,7 +212,14 @@ export async function uploadAvatar(file: File): Promise<AvatarUploadResult> {
   return { secureUrl: upload.secureUrl };
 }
 
-/** Remove o asset determinístico depois que a referência pública já foi apagada do perfil. */
+/**
+ * API: POST /api/profile/remove-avatar
+ *
+ * Objetivo: remover no Cloudinary o asset de avatar vinculado à conta autenticada.
+ * Autenticação: Firebase ID Token no header Authorization; não recebe publicId ou UID no corpo.
+ * Retorno: { removed: true }. O servidor deriva o publicId do UID validado para impedir remoção alheia.
+ * A limpeza remota é complementar: a referência do perfil já foi removida antes desta chamada.
+ */
 export async function removeAvatarAsset(): Promise<void> {
   const currentUser = auth?.currentUser;
   if (!currentUser) throw new Error('Entre novamente para remover sua foto de perfil.');
